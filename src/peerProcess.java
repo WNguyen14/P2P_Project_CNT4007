@@ -1,12 +1,12 @@
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Scanner;
+import java.util.*;
 
 public class peerProcess {
 
 	private String myPeerID;
 	private Config configInfo;
 	private HashMap<String, peerInfo> allPeerInfo;
+
+	private HashMap<String, BitSet> pieceAvailability;
 	private peerInfo myPeerInfo;
 
 	public peerProcess(String myPeerID) {
@@ -33,5 +33,22 @@ public class peerProcess {
 		return peersMap;
 	}
 
+	public void initPieces() {
+		for (Map.Entry<String, peerInfo> entry : allPeerInfo.entrySet()) {
+			BitSet available = new BitSet(getNumPieces());
+			if (this.allPeerInfo.get(entry.getKey()).getContainsFile()) {
+				available.set(0, getNumPieces());
+				this.pieceAvailability.put(entry.getKey(), available);
+			}
+		}
+	}
+
+	public int getNumPieces() {
+		int l = configInfo.getFileSize() / configInfo.getPieceSize();
+		if (configInfo.getFileSize() % configInfo.getPieceSize() != 0) {
+			l +=1;
+		}
+		return l;
+	}
 
 }
