@@ -32,7 +32,7 @@ public class handshake {
 
 	public void readHandshake(byte[] msg) {
 		String s = new String(msg, StandardCharsets.UTF_8);
-		// last 4 bits is peer id
+		// last 4 bits is peer id, just snip out
 		this.peerID = s.substring(28,32);
 	}
 
