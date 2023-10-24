@@ -7,7 +7,7 @@ import java.nio.charset.StandardCharsets;
 
 public class handshake {
 
-	private String header;
+	private final String header;
 	private String peerID;
 
 	public handshake(String peerID){
