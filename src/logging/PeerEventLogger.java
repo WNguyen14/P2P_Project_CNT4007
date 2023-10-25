@@ -18,7 +18,7 @@ public class PeerEventLogger {
         if (Logger.getCurrentLogLevel().ordinal() <= Logger.LogLevel.INFO.ordinal()) {
             try {
                 String message = String.format("[Time]: Peer [%d] has the preferred neighbors [%s]", peerId, preferredNeighbors);
-                LogWriter.writeToFile("info.log", message);
+                LogWriter.writeToFile("log_peer_"+peerId+".log", message);
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -35,7 +35,7 @@ public class PeerEventLogger {
         if (Logger.getCurrentLogLevel().ordinal() <= Logger.LogLevel.INFO.ordinal()) {
             try {
                 String message = String.format("[Time]: Peer [%d] has the optimistically unchoked neighbor [%d]", peerId, optimisticNeighbor);
-                LogWriter.writeToFile("info.log", message);
+                LogWriter.writeToFile("log_peer_"+peerId+".log", message);
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -53,7 +53,7 @@ public class PeerEventLogger {
         if (Logger.getCurrentLogLevel().ordinal() <= Logger.LogLevel.INFO.ordinal()) {
             try {
                 String message = String.format("[Time]: Peer [%d] received the 'have' message from [%d] for the piece [%d]", receiverPeerId, senderPeerId, pieceIndex);
-                LogWriter.writeToFile("info.log", message);
+                LogWriter.writeToFile("log_peer_"+receiverPeerId+".log", message);
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -70,7 +70,7 @@ public class PeerEventLogger {
         if (Logger.getCurrentLogLevel().ordinal() <= Logger.LogLevel.INFO.ordinal()) {
             try {
                 String message = String.format("[Time]: Peer [%d] received the 'interested' message from [%d]", receiverPeerId, senderPeerId);
-                LogWriter.writeToFile("info.log", message);
+                LogWriter.writeToFile("log_peer_"+receiverPeerId+".log", message);
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -87,7 +87,7 @@ public class PeerEventLogger {
         if (Logger.getCurrentLogLevel().ordinal() <= Logger.LogLevel.INFO.ordinal()) {
             try {
                 String message = String.format("[Time]: Peer [%d] received the 'not interested' message from [%d]", receiverPeerId, senderPeerId);
-                LogWriter.writeToFile("info.log", message);
+                LogWriter.writeToFile("log_peer_"+receiverPeerId+".log", message);
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -106,7 +106,7 @@ public class PeerEventLogger {
         if (Logger.getCurrentLogLevel().ordinal() <= Logger.LogLevel.INFO.ordinal()) {
             try {
                 String message = String.format("[Time]: Peer [%d] has downloaded the piece [%d] from [%d]. Now the number of pieces it has is [%d]", downloaderPeerId, pieceIndex, senderPeerId, numberOfPieces);
-                LogWriter.writeToFile("info.log", message);
+                LogWriter.writeToFile("log_peer_"+downloaderPeerId+".log", message);
             } catch (IOException e) {
                 e.printStackTrace();
             }

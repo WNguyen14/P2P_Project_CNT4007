@@ -18,12 +18,14 @@ public class ConnectionEventLogger {
         if (Logger.getCurrentLogLevel().ordinal() <= Logger.LogLevel.INFO.ordinal()) {
             try {
                 String message = String.format("[Time]: Peer [%d] makes a connection to Peer [%d]", peerId1, peerId2);
-                LogWriter.writeToFile("info.log", message);
+                LogWriter.writeToFile("log_peer_"+peerId1+".log", message);
             } catch (IOException e) {
                 e.printStackTrace();
             }
         }
     }
+
+    // NOTE: BELOW LOGS AREN'T NEEDED FOR PROJECT SPEC, BUT HELPFUL FOR DEBUGGING
 
     /**
      * Logs a message when a peer disconnects from another peer.
@@ -35,7 +37,7 @@ public class ConnectionEventLogger {
         if (Logger.getCurrentLogLevel().ordinal() <= Logger.LogLevel.INFO.ordinal()) {
             try {
                 String message = String.format("[Time]: Peer [%d] disconnects from Peer [%d]", peerId1, peerId2);
-                LogWriter.writeToFile("info.log", message);
+                LogWriter.writeToFile("log_peer_"+peerId1+".log", message);
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -45,6 +47,7 @@ public class ConnectionEventLogger {
     /**
      * Logs a message when a peer starts a handshake process.
      *
+     *
      * @param peerId1 the ID of the initiating peer
      * @param peerId2 the ID of the receiving peer
      */
@@ -52,7 +55,7 @@ public class ConnectionEventLogger {
         if (Logger.getCurrentLogLevel().ordinal() <= Logger.LogLevel.INFO.ordinal()) {
             try {
                 String message = String.format("[Time]: Peer [%d] starts handshake with Peer [%d]", peerId1, peerId2);
-                LogWriter.writeToFile("info.log", message);
+                LogWriter.writeToFile("log_peer_"+peerId1+".log", message);
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -69,7 +72,7 @@ public class ConnectionEventLogger {
         if (Logger.getCurrentLogLevel().ordinal() <= Logger.LogLevel.INFO.ordinal()) {
             try {
                 String message = String.format("[Time]: Peer [%d] successfully completes handshake with Peer [%d]", peerId1, peerId2);
-                LogWriter.writeToFile("info.log", message);
+                LogWriter.writeToFile("log_peer_"+peerId1+".log", message);
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -86,7 +89,7 @@ public class ConnectionEventLogger {
         if (Logger.getCurrentLogLevel().ordinal() <= Logger.LogLevel.INFO.ordinal()) {
             try {
                 String message = String.format("[Time]: Peer [%d] temporarily blocks Peer [%d]", peerId1, peerId2);
-                LogWriter.writeToFile("info.log", message);
+                LogWriter.writeToFile("log_peer_"+peerId1+".log", message);
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -103,7 +106,7 @@ public class ConnectionEventLogger {
         if (Logger.getCurrentLogLevel().ordinal() <= Logger.LogLevel.INFO.ordinal()) {
             try {
                 String message = String.format("[Time]: Peer [%d] unblocks Peer [%d]", peerId1, peerId2);
-                LogWriter.writeToFile("info.log", message);
+                LogWriter.writeToFile("log_peer_"+peerId1+".log", message);
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -120,7 +123,7 @@ public class ConnectionEventLogger {
         if (Logger.getCurrentLogLevel().ordinal() <= Logger.LogLevel.INFO.ordinal()) {
             try {
                 String message = String.format("[Time]: Peer [%d] sends a data request to Peer [%d]", requesterPeerId, receiverPeerId);
-                LogWriter.writeToFile("info.log", message);
+                LogWriter.writeToFile("log_peer_"+requesterPeerId+".log", message);
             } catch (IOException e) {
                 e.printStackTrace();
             }

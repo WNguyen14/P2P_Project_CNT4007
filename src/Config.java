@@ -2,6 +2,8 @@
 This class is for parsing and holding information in the Common.cfg file
  */
 
+import java.io.FileNotFoundException;
+import java.io.FileReader;
 import java.util.Scanner;
 
 public class Config {
@@ -13,8 +15,8 @@ public class Config {
 	private final int fileSize;
 	private final int pieceSize;
 
-	public Config(String fileName) {
-		Scanner in = new Scanner(fileName);
+	public Config(String fileName) throws FileNotFoundException {
+		Scanner in = new Scanner(new FileReader(fileName));
 		this.numberOfPreferredNeighbors = Integer.parseInt(in.nextLine().split(" ")[1]);
 		this.unchokingInterval = Integer.parseInt(in.nextLine().split(" ")[1]);
 		this.optimisticUnchokingInterval = Integer.parseInt(in.nextLine().split(" ")[1]);

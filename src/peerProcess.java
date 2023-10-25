@@ -2,6 +2,8 @@
 entry point to start the peer processes
  */
 
+import java.io.FileNotFoundException;
+import java.io.FileReader;
 import java.util.BitSet;
 import java.util.HashMap;
 import java.util.Map;
@@ -16,16 +18,20 @@ public class peerProcess {
 	private HashMap<String, BitSet> pieceAvailability;
 	private peerInfo myPeerInfo;
 
-	public peerProcess(String myPeerID) {
+	public static void main(String[] args) throws FileNotFoundException {
+		new peerProcess(args[0]);
+		System.out.println("Successfully initialized!");
+	}
+	public peerProcess(String myPeerID) throws FileNotFoundException {
 		this.myPeerID = myPeerID;
 		this.configInfo = new Config("Common.cfg");
 		this.allPeerInfo = makePeerInfo("PeerInfo.cfg");
 		this.myPeerInfo =  allPeerInfo.get(myPeerID);
 	}
 
-	public HashMap<String, peerInfo> makePeerInfo(String fileName) {
-		Scanner in = new Scanner(fileName);
-		HashMap<String, peerInfo> peersMap = null;
+	public HashMap<String, peerInfo> makePeerInfo(String fileName) throws FileNotFoundException {
+		Scanner in = new Scanner(new FileReader(fileName));
+		HashMap<String, peerInfo> peersMap = new HashMap<>();
 
 		while (in.hasNextLine()){
 			String[] line = in.nextLine().split(" ");
