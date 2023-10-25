@@ -3,6 +3,7 @@ package logging;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
+import java.time.LocalDateTime;
 import java.util.Date;
 import java.io.File;
 
@@ -36,21 +37,20 @@ public class LogWriter {
      * Writes a log message to the file with a timestamp.
      * @param message - Message to be logged
      */
-    public synchronized void writeLog(String message) {
-        try {
-            // Check if log rotation is needed
-            if (fileWriter != null && fileWriter.toString().length() > MAX_LOG_SIZE) {
-                rotateLog();
-            }
+    public static void writeToFile(String fileName, String message) throws IOException {
+        FileWriter fileWriter = new FileWriter(fileName, true);  // true means the file will be appended to
 
-            // Append timestamp and write the log
-            String timestamp = dateFormat.format(new Date());
-            fileWriter.write(timestamp + " - " + message + "\n");
-            fileWriter.flush();
-        } catch (IOException e) {
-            // Placeholder for generic error handling
-            System.err.println("Error writing to log: " + e.getMessage());
-        }
+        // Get the current time for the timestamp
+        LocalDateTime timestamp = LocalDateTime.now();
+
+        // Create the log entry
+        String logEntry = String.format("[%s]: %s\n", timestamp.toString(), message);
+
+        // Write the log entry to the file
+        fileWriter.write(logEntry);
+
+        // Close the FileWriter
+        fileWriter.close();
     }
 
     /**
