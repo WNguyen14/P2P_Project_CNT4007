@@ -45,8 +45,6 @@ public class peerProcess {
         this.pieceAvailability = new HashMap<>();
         this.executor = Executors.newCachedThreadPool();
 		
-
-		this.executor = Executors.newCachedThreadPool();
     }
 
 	
