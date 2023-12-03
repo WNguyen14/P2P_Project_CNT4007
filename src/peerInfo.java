@@ -50,23 +50,18 @@ public class peerInfo {
 		return containsFile;
 	}
 
-	public boolean IsInterested() {
-		
-	}
 
 	public boolean IsChoked() {
 		return choked;
 	}
 
-	public void setChoked()
+	public void choke()
 	{
-		if (this.IsChoked())
-		{
-			this.IsChoked = false;
-		}
-		else
-		{
-			this.IsChoked = true;
-		}
+		this.choked = true;
+	}
+
+	public void unchoke()
+	{
+		this.choked = false;
 	}
 }

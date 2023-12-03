@@ -5,7 +5,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 public class InterestManager {
-    private final Map<Integer, Set<Integer>> interestedPeers;
+    private Map<Integer, Set<Integer>> interestedPeers;
 
     public InterestManager() {
         interestedPeers = new ConcurrentHashMap<>();
