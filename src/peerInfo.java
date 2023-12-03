@@ -58,7 +58,7 @@ public class peerInfo {
 		return choked;
 	}
 
-	public void chokeUnchoke()
+	public void setChoked()
 	{
 		if (this.IsChoked())
 		{

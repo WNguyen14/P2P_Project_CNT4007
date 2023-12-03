@@ -12,6 +12,7 @@ import java.util.Map;
      private ScheduledExecutorService timer = null;
 
      private int unchokingInterval;
+     private int optUnchokingInterval;
      private int numPreferred;
      //make a hashmap and grab peerInfo from peerProcess
      private HashMap<String, peerInfo> allPeerInfo;
@@ -19,7 +20,7 @@ import java.util.Map;
      public chokeHandler(int Interval, int pref){
         unchokingInterval = Interval;
         numPreferred = pref; 
-        allPeerInfo = peerProcess.getPeerInfo();
+        allPeerInfo = peerProcess.makePeerInfo();
      }
 
      public void start() {
@@ -33,69 +34,37 @@ import java.util.Map;
         for (Map.Entry<String, peerInfo> entry : allPeerInfo.entrySet()) {
             String key = entry.getKey();
             peerInfo value = entry.getValue();
-            //make unchoked list of peers
-            if (value.getInterested() && value.getChoked()) {
-                unchoked.add(key);
+            //list interested neighbors using interestmanager
+            Set<String> interestedNeighbors = InterestManager.getPeersInterestedIn(value.getPeerID());
+            //out of the interested neighbors, find the one with the fastest download speed
+            Collections.sort(interestedNeighbors, Comparator.comparingDouble(0).reversed());
+            List<String> preferredNeighbors = interestedNeighbors.subList(0, numPreferred);
+            //unchoke all preferred neighbors
+            for (String neighbor : preferredNeighbors) {
+                if (!unchoked.contains(neighbor)) {
+                    allPeerInfo[neighbor].unchoke();
+                    unchoked.add(neighbor);
+                }
+            }
+            //choke all other neighbors
+            for (String neighbor : interestedNeighbors) {
+                if (!preferredNeighbors.contains(neighbor)) {
+                    if (unchoked.contains(neighbor)) {
+                        unchoked.remove(neighbor);
+                    }
+                    allPeerInfo[neighbor].choke();
+                }
+            }
+            //determine optomistically unchoked neighbor by choosing randomly from the interested neighbors
+            Random rand = new Random();
+            String optUnchokedNeighbor = interestedNeighbors.get(rand.nextInt(interestedNeighbors.size()));
+            //if the optomistically unchoked neighbor is not already unchoked, unchoke them
+            if (!unchoked.contains(optUnchokedNeighbor)) {
+                allPeerInfo[optUnchokedNeighbor].unchoke();
+                unchoked.add(optUnchokedNeighbor);
             }
         }
-
-        List<Neighbor> interestedNeighbors = peer.getInterestedNeighbors();
-        Collections.sort(interestedNeighbors, Comparator.comparingDouble(Neighbor::getDownloadRate).reversed());
-
-        List<Neighbor> preferredNeighbors = interestedNeighbors.subList(0, Math.min(preferredNeighbors, interestedNeighbors.size()));
-
-        for (Neighbor neighbor : preferredNeighbors) {
-            if (!neighbor.isUnchoked()) {
-                peer.sendUnchokeMessage(neighbor);
-                neighbor.setUnchoked(true);
-            }
-        }
-
-        for (Neighbor neighbor : interestedNeighbors) {
-            if (!preferredNeighbors.contains(neighbor) && neighbor.isUnchoked()) {
-                peer.sendChokeMessage(neighbor);
-                neighbor.setUnchoked(false);
-            }
-        }
+        
     }
-     /*TimerTask chokeCheck = new TimerTask() {
-         @Override
-         public void run() {
-             //TODO: get the set of unchoked peers
-             Set<String> unchokedlist = new HashSet<>();
-
-             //initialize a new set to fill after finding unchoked peers
-             Set<String> newset = new HashSet<>();
-
-             //TODO: grab list of interested peers
-             Set<String> interested = new HashSet<>();
-
-             //iterate through the interested peers to find new preferred
-             if (!interested.isEmpty()) {
-                 for (int i = 0; i < numPreferred; i++) {
-                     int maxdownload = 0;
-                     String bestPeer = "";
-                     for (String s : unchokedlist) {
-                         //calculate the download rate of peer S
-                         int download = 0;
-                         //find the max download rate
-                         if (download > maxdownload) {
-                             maxdownload = download;
-                             bestPeer = s;
-                         }
-
-                     }
-                     //TODO: send the unchoke message to bestPeer
-                 }
-
-
-             }
-             //reset the unchoked list
-             else {
-                 for (String p : unchokedlist) {
-                     //send the message that the peer is choked
-                 }
-             }
-         }
-     };*/
+     
  }
