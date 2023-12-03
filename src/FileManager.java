@@ -1,30 +1,38 @@
 import java.io.*;
 import java.util.BitSet;
+import logging.ConnectionEventLogger;
+import logging.PeerEventLogger;
+import errorhandling.P2PFileSharingException;
+import errorhandling.P2PFileSharingException.ErrorType;
 
 public class FileManager {
-    private BitSet piecesHave; // Tracks which pieces this peer has
+    private BitSet piecesHave;
     private final int pieceSize;
     private final int fileSize;
     private final String fileName;
-    private byte[][] filePieces; // Stores the file pieces
+    private byte[][] filePieces;
+    private final int peerId; // Assuming peerId is passed to the FileManager for logging
 
-    // Constructor to set up the FileManager.
-    public FileManager(int fileSize, int pieceSize, String fileName, boolean hasFile) {
+    public FileManager(int fileSize, int pieceSize, String fileName, boolean hasFile, int peerId) throws P2PFileSharingException {
         this.fileSize = fileSize;
         this.pieceSize = pieceSize;
         this.fileName = fileName;
-        int numPieces = (fileSize + pieceSize - 1) / pieceSize; // Calculate the number of pieces
+        this.peerId = peerId;
+        int numPieces = (fileSize + pieceSize - 1) / pieceSize;
         this.piecesHave = new BitSet(numPieces);
         this.filePieces = new byte[numPieces][];
 
         if (hasFile) {
-            piecesHave.set(0, numPieces); // If the peer has the file, set all bits to true.
-            loadFile(); // Load the file into memory if the peer has it
+            piecesHave.set(0, numPieces);
+            try {
+                loadFile();
+            } catch (IOException e) {
+                throw new P2PFileSharingException("Failed to load file: " + fileName, ErrorType.FILE_ERROR, e);
+            }
         }
     }
 
-    // Loads the file into the filePieces array.
-    private void loadFile() {
+    private void loadFile() throws IOException {
         try (RandomAccessFile file = new RandomAccessFile(fileName, "r")) {
             for (int i = 0; i < filePieces.length; i++) {
                 int pieceLength = Math.min(pieceSize, (int)file.length() - i * pieceSize);
@@ -32,23 +40,23 @@ public class FileManager {
                 file.seek((long)i * pieceSize);
                 file.readFully(filePieces[i]);
             }
+            PeerEventLogger.downloadComplete(peerId);
         } catch (IOException e) {
-            e.printStackTrace();
+            PeerEventLogger.logPeerCommunicationError(peerId, e);
+            throw e;
         }
     }
 
-    // Gets a piece of the file by index.
-    public synchronized byte[] getPiece(int index) throws IndexOutOfBoundsException {
+    public synchronized byte[] getPiece(int index) throws P2PFileSharingException {
         if (index < 0 || index >= filePieces.length) {
-            throw new IndexOutOfBoundsException("Invalid piece index: " + index);
+            throw new P2PFileSharingException("Invalid piece index: " + index, ErrorType.FILE_ERROR);
         }
         return filePieces[index];
     }
 
-    // Stores a piece of the file by index.
-    public synchronized void storePiece(int index, byte[] data) throws IndexOutOfBoundsException {
+    public synchronized void storePiece(int index, byte[] data) throws P2PFileSharingException {
         if (index < 0 || index >= filePieces.length) {
-            throw new IndexOutOfBoundsException("Invalid piece index: " + index);
+            throw new P2PFileSharingException("Invalid piece index: " + index, ErrorType.FILE_ERROR);
         }
         filePieces[index] = data;
         piecesHave.set(index);
@@ -57,49 +65,46 @@ public class FileManager {
         }
     }
 
-    // Reassembles the file from pieces when all pieces have been received.
-    private void reassembleFile() {
+    private void reassembleFile() throws P2PFileSharingException {
         try (FileOutputStream fos = new FileOutputStream(fileName)) {
             for (byte[] piece : filePieces) {
                 if (piece != null) {
                     fos.write(piece);
                 } else {
-                    System.out.println("Missing file piece during reassembly");
-                    return;
+                    throw new P2PFileSharingException("Missing file piece during reassembly", ErrorType.FILE_ERROR);
                 }
             }
-            System.out.println("File reassembly complete.");
+            PeerEventLogger.downloadComplete(peerId);
         } catch (IOException e) {
-            e.printStackTrace();
+            throw new P2PFileSharingException("Failed to reassemble file: " + fileName, ErrorType.FILE_ERROR, e);
         }
     }
 
-    // Gets the bitfield representing the pieces this peer has.
     public synchronized BitSet getBitfield() {
         return (BitSet) piecesHave.clone();
     }
 
-    // Updates the bitfield when a 'have' message is received.
     public synchronized void updateHave(int pieceIndex) {
         piecesHave.set(pieceIndex);
     }
 
-    // Updates the bitfield when a 'bitfield' message is received.
     public synchronized void updateBitfield(BitSet bitfield) {
         piecesHave.or(bitfield);
     }
 
-    // Sends a piece to the peer over the given DataOutputStream.
-    public synchronized void sendPiece(int pieceIndex, DataOutputStream out) throws IOException {
+    public synchronized void sendPiece(int pieceIndex, DataOutputStream out) throws P2PFileSharingException {
         if (!piecesHave.get(pieceIndex)) {
-            System.out.println("Do not have piece " + pieceIndex);
-            return; // Do not have the piece.
+            return;
         }
 
         byte[] pieceData = getPiece(pieceIndex);
         if (pieceData != null) {
-            out.writeInt(pieceData.length);
-            out.write(pieceData);
+            try {
+                out.writeInt(pieceData.length);
+                out.write(pieceData);
+            } catch (IOException e) {
+                throw new P2PFileSharingException("Failed to send piece: " + pieceIndex, ErrorType.CONNECTION_ERROR, e);
+            }
         }
     }
 }

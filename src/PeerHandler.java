@@ -280,18 +280,19 @@ public class PeerHandler implements Runnable {
         }
     }
 
-    private void handleRequest(byte[] message) {
+    private void handleRequest(byte[] message) throws P2PFileSharingException{
         // Extract the requested piece index from the message
         requestedPieceIndex = ByteBuffer.wrap(Arrays.copyOfRange(message, 1, 5)).getInt();
         // Perform the rest of the request logic, potentially sending a piece back
         sendRequestedPiece();
     }
 
-    private void sendRequestedPiece() {
+    private void sendRequestedPiece() throws P2PFileSharingException{
         if (!chokedByPeer) {
             try {
                 fileManager.sendPiece(requestedPieceIndex, out);
-            } catch (IOException e) {
+            } catch (P2PFileSharingException e) {
+                
                 System.err.println(
                         "IOException occurred while sending piece " + requestedPieceIndex + ": " + e.getMessage());
                 // Handle exception by logging or sending a different message

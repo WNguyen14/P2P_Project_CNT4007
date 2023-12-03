@@ -83,8 +83,14 @@ public class peerProcess {
                     Socket clientSocket = serverSocket.accept();
                     int peerId = determinePeerId(clientSocket);
                     socketToPeerIdMap.put(clientSocket, peerId);
-                    FileManager fm = new FileManager(configInfo.getFileSize(), configInfo.getPieceSize(), configInfo.getConfigFileName(), myPeerInfo.getContainsFile());
-                    executor.submit(new PeerHandler(clientSocket, fm, interestManager, pieceAvailability));
+                    try {
+                        FileManager fm = new FileManager(configInfo.getFileSize(), configInfo.getPieceSize(),
+                                configInfo.getConfigFileName(), myPeerInfo.getContainsFile(), myPeerID);
+                        executor.submit(new PeerHandler(clientSocket, fm, interestManager, pieceAvailability));
+                    } catch (P2PFileSharingException e) {
+                        Logger.error("Failed to initialize FileManager: %s", e.getMessage());
+                        // REEEEEEEEEEEEEEEEEEEE
+                    }
                 } catch (IOException e) {
                     Logger.error("Error accepting connection: %s", e.getMessage());
                 }
@@ -133,9 +139,16 @@ public class peerProcess {
                 throw new IOException("Incorrect peer ID received in handshake");
             }
             socketToPeerIdMap.put(peerSocket, receivedPeerID);
-            FileManager fm = new FileManager(configInfo.getFileSize(), configInfo.getPieceSize(), configInfo.getConfigFileName(), myPeerInfo.getContainsFile());
-            executor.submit(new PeerHandler(peerSocket, fm, interestManager, pieceAvailability));
-            Logger.info("Connected to peer %d", receivedPeerID);
+
+            try {
+                FileManager fm = new FileManager(configInfo.getFileSize(), configInfo.getPieceSize(),
+                        configInfo.getConfigFileName(), myPeerInfo.getContainsFile(), myPeerID);
+                executor.submit(new PeerHandler(peerSocket, fm, interestManager, pieceAvailability));
+                Logger.info("Connected to peer %d", receivedPeerID);
+            } catch (P2PFileSharingException e) {
+                Logger.error("Failed to initialize FileManager: %s", e.getMessage());
+            }
+
         } catch (IOException e) {
             Logger.error("Error in peer connection: %s", e.getMessage());
             throw e;
