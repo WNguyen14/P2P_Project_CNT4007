@@ -17,7 +17,7 @@ public class PeerHandler implements Runnable {
     private DataOutputStream out;
     private FileManager fileManager;
     private InterestManager interestManager;
-    private HashMap<String, BitSet> pieceAvailability;
+    private HashMap<Integer, BitSet> pieceAvailability;
     private boolean chokedByPeer = false;
 
     private static final Map<Socket, Integer> socketToPeerIdMap = new ConcurrentHashMap<>();
@@ -26,7 +26,7 @@ public class PeerHandler implements Runnable {
     private int requestedPieceIndex;
 
     public PeerHandler(Socket socket, FileManager fileManager, InterestManager interestManager,
-            HashMap<String, BitSet> pieceAvailability) throws IOException {
+            HashMap<Integer, BitSet> pieceAvailability) throws IOException {
         this.peerSocket = socket;
         this.in = new DataInputStream(peerSocket.getInputStream());
         this.out = new DataOutputStream(peerSocket.getOutputStream());
@@ -79,7 +79,7 @@ public class PeerHandler implements Runnable {
         // Extract the peer ID from the response
         int remotePeerID = ByteBuffer.wrap(Arrays.copyOfRange(response, 28, 32)).getInt();
 
-        // Check if the handshake is from yourself
+        // Check if the handshake is self-connection
         if (remotePeerID == getPeerIdFromSocket(peerSocket)) {
             throw new IOException("Connected to self.");
         }
@@ -159,7 +159,7 @@ public class PeerHandler implements Runnable {
             System.out.println("Peer " + peerId + " is interested in pieces: " + interestingPieces);
         } else {
             // If there are no interesting pieces, handle as not interested.
-            handleNotInterested(); // You can call this directly if no interesting pieces.
+            handleNotInterested(); // can call this directly if no interesting pieces.
         }
     }
     
@@ -176,8 +176,8 @@ public class PeerHandler implements Runnable {
     private Set<Integer> getInterestingPieces(int peerId) {
 
         // Todo fix this string bs cause might get an error here
-        BitSet myBitfield = pieceAvailability.get(Integer.toString(getPeerIdFromSocket(peerSocket))); // Your own bitfield
-        BitSet otherPeerBitfield = pieceAvailability.get(Integer.toString(peerId)); // The other peer's bitfield
+        BitSet myBitfield = pieceAvailability.get(getPeerIdFromSocket(peerSocket)); // own bitfield
+        BitSet otherPeerBitfield = pieceAvailability.get(peerId); // The other peer's bitfield
     
         Set<Integer> interestingPieces = new HashSet<>();
         if (otherPeerBitfield != null) {
@@ -193,19 +193,53 @@ public class PeerHandler implements Runnable {
     }
 
     private void handleHave(byte[] message) {
-        // Implement have logic, updating the bitfield for the peer that sent this
-        // message
         int pieceIndex = ByteBuffer.wrap(Arrays.copyOfRange(message, 1, 5)).getInt();
         fileManager.updateHave(pieceIndex);
+    
+        int remotePeerID = getPeerIdFromSocket(peerSocket);
+        BitSet peerBitfield = pieceAvailability.get(remotePeerID);
+        peerBitfield.set(pieceIndex);
+    
+        Set<Integer> interestingPieces = getInterestingPieces(remotePeerID);
+        if (!interestingPieces.isEmpty()) {
+            sendInterestedMessage();
+        } else {
+            sendNotInterestedMessage();
+        }
+    }
+    
+
+    private void handleBitfield(byte[] messageBytes) {
+        BitSet receivedBitfield = message.parseBitfieldMessage(messageBytes);
+
+        // Update the piece availability for the remote peer
+        int remotePeerID = getPeerIdFromSocket(peerSocket);
+        pieceAvailability.put(remotePeerID, receivedBitfield);
+
+        // After updating the bitfield, check if interested
+        Set<Integer> interestingPieces = getInterestingPieces(remotePeerID);
+        if (!interestingPieces.isEmpty()) {
+            sendInterestedMessage();
+        } else {
+            sendNotInterestedMessage();
+        }
     }
 
-    private void handleBitfield(byte[] message) {
-        // Implement bitfield logic, updating the bitfield for the peer that sent this
-        // message
-        BitSet bitfield = BitSet.valueOf(Arrays.copyOfRange(message, 1, message.length));
-        fileManager.updateBitfield(bitfield);
+    private void sendInterestedMessage() {
+        try {
+            out.write(new message('2').getMessage());
+        } catch (IOException e) {
+            System.err.println("Error sending interested message: " + e.getMessage());
+        }
     }
 
+    private void sendNotInterestedMessage() {
+        try {
+            out.write(new message('3').getMessage());
+        } catch (IOException e) {
+            System.err.println("Error sending not interested message: " + e.getMessage());
+        }
+    }
     private void handleRequest(byte[] message) {
         // Extract the requested piece index from the message
         requestedPieceIndex = ByteBuffer.wrap(Arrays.copyOfRange(message, 1, 5)).getInt();

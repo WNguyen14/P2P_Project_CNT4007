@@ -25,7 +25,7 @@ public class peerProcess {
     private int myPeerID;
     private Config configInfo;
     private HashMap<String, peerInfo> allPeerInfo;
-    private HashMap<String, BitSet> pieceAvailability;
+    private HashMap<Integer, BitSet> pieceAvailability;
     private peerInfo myPeerInfo;
     private ServerSocket serverSocket;
     private ExecutorService executor;
@@ -137,6 +137,13 @@ private void connectToPreviousPeers() {
                 
                 // Store the handshake information
                 socketToPeerIdMap.put(peerSocket, receivedPeerID);
+
+                if (myPeerInfo.getContainsFile()) {
+                    // Send your bitfield message
+                    BitSet myBitfield = pieceAvailability.get(myPeerID);
+                    byte[] bitfieldMessage = message.createBitfieldMessage(myBitfield);
+                    out.write(bitfieldMessage);
+                }
                 
                 // Pass the interestManager instance to the PeerHandler
                 FileManager fm = new FileManager(configInfo.getFileSize(), configInfo.getPieceSize(), configInfo.getConfigFileName(), myPeerInfo.getContainsFile());
@@ -170,16 +177,19 @@ private void connectToPreviousPeers() {
         return peersMap;
     }
 
-    private void initPieces() {
+     // Updated method to initialize pieces
+     private void initPieces() {
         int numPieces = getNumPieces();
         for (Map.Entry<String, peerInfo> entry : allPeerInfo.entrySet()) {
             BitSet available = new BitSet(numPieces);
             if (entry.getValue().getContainsFile()) {
                 available.set(0, numPieces);
             }
-            this.pieceAvailability.put(entry.getKey(), available);
+            // Use Integer for peer ID when putting in the map
+            this.pieceAvailability.put(Integer.parseInt(entry.getKey()), available);
         }
     }
+
 
     public BitSet getPeerBitfield(String peerId) {
         return pieceAvailability.get(peerId);
