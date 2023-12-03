@@ -5,6 +5,7 @@ import java.net.Socket;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.BitSet;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
@@ -16,18 +17,22 @@ public class PeerHandler implements Runnable {
     private DataOutputStream out;
     private FileManager fileManager;
     private InterestManager interestManager;
+    private HashMap<String, BitSet> pieceAvailability;
     private boolean chokedByPeer = false;
+
     private static final Map<Socket, Integer> socketToPeerIdMap = new ConcurrentHashMap<>();
 
     // Variable to store the piece index requested by this peer
     private int requestedPieceIndex;
 
-    public PeerHandler(Socket socket, FileManager fileManager, InterestManager interestManager) throws IOException {
+    public PeerHandler(Socket socket, FileManager fileManager, InterestManager interestManager,
+            HashMap<String, BitSet> pieceAvailability) throws IOException {
         this.peerSocket = socket;
         this.in = new DataInputStream(peerSocket.getInputStream());
         this.out = new DataOutputStream(peerSocket.getOutputStream());
         this.fileManager = fileManager;
         this.interestManager = interestManager;
+        this.pieceAvailability = pieceAvailability; // Initialize the pieceAvailability
     }
 
     private int getPeerIdFromSocket(Socket socket) {
@@ -58,21 +63,30 @@ public class PeerHandler implements Runnable {
         }
     }
 
+    // In PeerHandler.java
     private void performHandshake() throws IOException {
+        // Create a handshake object with the current peer's ID
         handshake myHandshake = new handshake(getPeerIdFromSocket(peerSocket));
-        byte[] handshakeMessage = myHandshake.createHandshake();
 
-        out.write(handshakeMessage);
+        // Send the handshake message
+        out.write(myHandshake.createHandshake());
         out.flush();
 
+        // Read the handshake response
         byte[] response = new byte[32];
         in.readFully(response);
 
-        int remotePeerID = handshake.readHandshake(response);
+        // Extract the peer ID from the response
+        int remotePeerID = ByteBuffer.wrap(Arrays.copyOfRange(response, 28, 32)).getInt();
+
+        // Check if the handshake is from yourself
         if (remotePeerID == getPeerIdFromSocket(peerSocket)) {
             throw new IOException("Connected to self.");
         }
+
+        // Store the mapping of the socket to peer ID
         socketToPeerIdMap.put(peerSocket, remotePeerID);
+
         System.out.println("Handshake successful with peer: " + remotePeerID);
     }
 
@@ -149,14 +163,18 @@ public class PeerHandler implements Runnable {
         System.out.println("Peer " + peerId + " is not interested.");
     }
 
-    // Additional helper method to determine interesting pieces
     private Set<Integer> getInterestingPieces(int peerId) {
-        // Implement logic to determine interesting pieces based on bitfields
+
+        // idk
+        BitSet myBitfield = pieceAvailability.get(Integer.toString(getPeerIdFromSocket(peerSocket))); // The bitfield of the current peer
+        BitSet peerBitfield = pieceAvailability.get(Integer.toString(peerId)); // The bitfield of the peer we're interested in
+
         Set<Integer> interestingPieces = new HashSet<>();
-        // Example logic:
-        // if (/* condition to check if piece is interesting */) {
-        // interestingPieces.add(/* piece index */);
-        // }
+        for (int i = 0; i < peerBitfield.length(); i++) {
+            if (peerBitfield.get(i) && !myBitfield.get(i)) {
+                interestingPieces.add(i);
+            }
+        }
         return interestingPieces;
     }
 
