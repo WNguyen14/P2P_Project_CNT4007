@@ -24,6 +24,8 @@ public class peerProcess {
     private ServerSocket serverSocket;
     private ExecutorService executor;
 
+    private static final Map<Socket, String> socketToPeerIdMap = new ConcurrentHashMap<>();
+
     public static void main(String[] args) {
         try {
             if (args.length != 1) {
@@ -44,10 +46,8 @@ public class peerProcess {
         this.myPeerInfo = allPeerInfo.get(myPeerID);
         this.pieceAvailability = new HashMap<>();
         this.executor = Executors.newCachedThreadPool();
-		
-    }
 
-	
+    }
 
     private void start() throws IOException {
         System.out.println("Peer " + myPeerID + " starting...");
@@ -68,11 +68,21 @@ public class peerProcess {
         executor.submit(() -> {
             while (!serverSocket.isClosed()) {
                 try {
-					Socket clientSocket = serverSocket.accept();
-					FileManager fm = new FileManager(configInfo.getFileSize(), configInfo.getPieceSize(), configInfo.getConfigFileName(), myPeerInfo.getContainsFile());
-					executor.submit(new PeerHandler(clientSocket, fm));
+                    Socket clientSocket = serverSocket.accept();
+
+                    // You need to determine the peer ID here. The code is commented out because
+                    // it depends on how you retrieve the peer ID (e.g., from a handshake)
+                    // String peerId = ...
+                    // socketToPeerIdMap.put(clientSocket, peerId);
+
+                    FileManager fm = new FileManager(
+                            configInfo.getFileSize(),
+                            configInfo.getPieceSize(),
+                            configInfo.getConfigFileName(),
+                            myPeerInfo.getContainsFile());
+                    executor.submit(new PeerHandler(clientSocket, fm));
                 } catch (IOException e) {
-                    if(serverSocket.isClosed()) {
+                    if (serverSocket.isClosed()) {
                         System.out.println("Server socket is closed, stopping the server.");
                     } else {
                         e.printStackTrace();
