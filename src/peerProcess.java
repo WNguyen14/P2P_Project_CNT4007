@@ -32,7 +32,6 @@ public class peerProcess {
 
     private static final Map<Socket, Integer> socketToPeerIdMap = new ConcurrentHashMap<>();
 
-
     private InterestManager interestManager = new InterestManager();
 
     public static void main(String[] args) {
@@ -79,18 +78,18 @@ public class peerProcess {
             while (!serverSocket.isClosed()) {
                 try {
                     Socket clientSocket = serverSocket.accept();
-    
+
                     // Determine the peer ID after the handshake
                     int peerId = determinePeerId(clientSocket);
                     // Store peerId as an Integer in socketToPeerIdMap
                     socketToPeerIdMap.put(clientSocket, peerId);
-    
+
                     FileManager fm = new FileManager(
                             configInfo.getFileSize(),
                             configInfo.getPieceSize(),
                             configInfo.getConfigFileName(),
                             myPeerInfo.getContainsFile());
-    
+
                     // Pass the interestManager instance to the PeerHandler
                     executor.submit(new PeerHandler(clientSocket, fm, interestManager, pieceAvailability));
                 } catch (IOException e) {
@@ -108,57 +107,59 @@ public class peerProcess {
         // Extract the peer ID from the handshake message as an integer
         return ByteBuffer.wrap(Arrays.copyOfRange(handshake, 28, 32)).getInt();
     }
+
     // In peerProcess.java
-private void connectToPreviousPeers() {
-    // Connect to peers with a lower peer ID (which means they started earlier).
-    allPeerInfo.forEach((peerID, info) -> {
-        int currentPeerID = Integer.parseInt(peerID);
-        if (currentPeerID < myPeerID) {
-            try {
-                Socket peerSocket = new Socket(info.getPeerAddress(), info.getPeerPort());
-                
-                // Perform handshake
-                handshake hs = new handshake(myPeerID);
-                DataOutputStream out = new DataOutputStream(peerSocket.getOutputStream());
-                DataInputStream in = new DataInputStream(peerSocket.getInputStream());
-                
-                out.write(hs.createHandshake());
-                out.flush();
-                
-                // Read handshake response
-                byte[] response = new byte[32];
-                in.readFully(response);
-                
-                // Validate handshake response
-                int receivedPeerID = ByteBuffer.wrap(Arrays.copyOfRange(response, 28, 32)).getInt();
-                if (receivedPeerID != currentPeerID) {
-                    throw new IOException("Handshake response from incorrect peer: Expected " + currentPeerID + " but received " + receivedPeerID);
-                }
-                
-                // Store the handshake information
-                socketToPeerIdMap.put(peerSocket, receivedPeerID);
+    private void connectToPreviousPeers() {
+        // Connect to peers with a lower peer ID (which means they started earlier).
+        allPeerInfo.forEach((peerID, info) -> {
+            int currentPeerID = Integer.parseInt(peerID);
+            if (currentPeerID < myPeerID) {
+                try {
+                    Socket peerSocket = new Socket(info.getPeerAddress(), info.getPeerPort());
 
-                if (myPeerInfo.getContainsFile()) {
-                    // Send your bitfield message
-                    BitSet myBitfield = pieceAvailability.get(myPeerID);
-                    byte[] bitfieldMessage = message.createBitfieldMessage(myBitfield);
-                    out.write(bitfieldMessage);
+                    // Perform handshake
+                    handshake hs = new handshake(myPeerID);
+                    DataOutputStream out = new DataOutputStream(peerSocket.getOutputStream());
+                    DataInputStream in = new DataInputStream(peerSocket.getInputStream());
+
+                    out.write(hs.createHandshake());
+                    out.flush();
+
+                    // Read handshake response
+                    byte[] response = new byte[32];
+                    in.readFully(response);
+
+                    // Validate handshake response
+                    int receivedPeerID = ByteBuffer.wrap(Arrays.copyOfRange(response, 28, 32)).getInt();
+                    if (receivedPeerID != currentPeerID) {
+                        throw new IOException("Handshake response from incorrect peer: Expected " + currentPeerID
+                                + " but received " + receivedPeerID);
+                    }
+
+                    // Store the handshake information
+                    socketToPeerIdMap.put(peerSocket, receivedPeerID);
+
+                    if (myPeerInfo.getContainsFile()) {
+                        // Send your bitfield message
+                        BitSet myBitfield = pieceAvailability.get(myPeerID);
+                        byte[] bitfieldMessage = message.createBitfieldMessage(myBitfield);
+                        out.write(bitfieldMessage);
+                    }
+
+                    // Pass the interestManager instance to the PeerHandler
+                    FileManager fm = new FileManager(configInfo.getFileSize(), configInfo.getPieceSize(),
+                            configInfo.getConfigFileName(), myPeerInfo.getContainsFile());
+                    PeerHandler peerHandler = new PeerHandler(peerSocket, fm, interestManager, pieceAvailability);
+
+                    // Start a new thread to handle this peer connection
+                    executor.submit(peerHandler);
+
+                } catch (IOException e) {
+                    System.err.println("Error connecting to peer " + currentPeerID + ": " + e.getMessage());
                 }
-                
-                // Pass the interestManager instance to the PeerHandler
-                FileManager fm = new FileManager(configInfo.getFileSize(), configInfo.getPieceSize(), configInfo.getConfigFileName(), myPeerInfo.getContainsFile());
-                PeerHandler peerHandler = new PeerHandler(peerSocket, fm, interestManager, pieceAvailability);
-                
-                // Start a new thread to handle this peer connection
-                executor.submit(peerHandler);
-                
-            } catch (IOException e) {
-                System.err.println("Error connecting to peer " + currentPeerID + ": " + e.getMessage());
             }
-        }
-    });
-}
-
+        });
+    }
 
     public HashMap<String, peerInfo> makePeerInfo(String fileName) throws FileNotFoundException {
         Scanner in = new Scanner(new FileReader(fileName));
@@ -177,8 +178,8 @@ private void connectToPreviousPeers() {
         return peersMap;
     }
 
-     // Updated method to initialize pieces
-     private void initPieces() {
+    // Updated method to initialize pieces
+    private void initPieces() {
         int numPieces = getNumPieces();
         for (Map.Entry<String, peerInfo> entry : allPeerInfo.entrySet()) {
             BitSet available = new BitSet(numPieces);
@@ -190,11 +191,9 @@ private void connectToPreviousPeers() {
         }
     }
 
-
     public BitSet getPeerBitfield(String peerId) {
         return pieceAvailability.get(peerId);
     }
-    
 
     private int getNumPieces() {
         int l = configInfo.getFileSize() / configInfo.getPieceSize();
@@ -203,4 +202,5 @@ private void connectToPreviousPeers() {
         }
         return l;
     }
+
 }

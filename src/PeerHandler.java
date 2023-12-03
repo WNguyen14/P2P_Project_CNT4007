@@ -123,34 +123,64 @@ public class PeerHandler implements Runnable {
         }
     }
 
+    // In PeerHandler.java
     private void handleChoke() {
-        // When we're choked by a peer, we should stop sending 'request' messages
-        // This typically means updating a flag that tracks whether we're choked by this
-        // peer
-        // This could also trigger some kind of event or state change in the peer's
-        // logic
-        System.out.println("Choked by peer. Stopping requests.");
-        // Set a flag or notify the system that this peer has choked us
-        // e.g., this.chokedByPeer = true;
+        chokedByPeer = true;
+        // Additional logic when choked
+        System.out.println("Choked by peer " + getPeerIdFromSocket(peerSocket));
+    }
+    
+    private void handleUnchoke() {
+        chokedByPeer = false;
+        // Additional logic when unchoked (like requesting pieces)
+        System.out.println("Unchoked by peer " + getPeerIdFromSocket(peerSocket));
+        requestNeededPieces();
     }
 
-    private void handleUnchoke() {
-        // When we're unchoked by a peer, we can start requesting pieces again
-        System.out.println("Unchoked by peer. Can request pieces now.");
-        // Set a flag or notify the system that this peer has unchoked us
-        // e.g., this.chokedByPeer = false;
-        // And then start requesting pieces that we need
-        // e.g., requestNeededPieces();
+    private void requestNeededPieces() {
+        int peerId = getPeerIdFromSocket(peerSocket);
+        BitSet myBitfield = fileManager.getBitfield();
+        BitSet peerBitfield = pieceAvailability.get(peerId);
+    
+        if (peerBitfield != null) {
+            for (int i = 0; i < peerBitfield.length(); i++) {
+                if (peerBitfield.get(i) && !myBitfield.get(i)) {
+                    requestPiece(i);
+                    break; // Break after requesting one piece to avoid flooding
+                }
+            }
+        }
     }
+    
+    private void requestPiece(int pieceIndex) {
+        try {
+            // Creating a request message for the specified piece index
+            byte[] requestMessage = createRequestMessage(pieceIndex);
+            out.write(requestMessage);
+        } catch (IOException e) {
+            System.err.println("Error sending request message for piece " + pieceIndex + ": " + e.getMessage());
+        }
+    }
+    
+    private byte[] createRequestMessage(int pieceIndex) {
+        // Assuming the message format is: [message length (4 bytes)] + [message type (1 byte)] + [piece index (4 bytes)]
+        ByteBuffer buffer = ByteBuffer.allocate(9);
+        buffer.putInt(5); // Length of the message (1 byte for type + 4 bytes for piece index)
+        buffer.put((byte) '6'); // Message type '6' for request
+        buffer.putInt(pieceIndex); // The requested piece index
+    
+        return buffer.array();
+    }
+    
 
     private void handleInterested() {
         int peerId = getPeerIdFromSocket(peerSocket);
-    
+
         // Assuming getInterestingPieces returns the indices of the pieces that
         // this peer has and the other peer doesn't. This should be based on comparing
         // the two bitfields: the current peer's and the other peer's.
         Set<Integer> interestingPieces = getInterestingPieces(peerId);
-    
+
         // If there are interesting pieces, mark the peer as interested in those pieces.
         if (!interestingPieces.isEmpty()) {
             for (int pieceIndex : interestingPieces) {
@@ -162,15 +192,16 @@ public class PeerHandler implements Runnable {
             handleNotInterested(); // can call this directly if no interesting pieces.
         }
     }
-    
+
     private void handleNotInterested() {
         int peerId = getPeerIdFromSocket(peerSocket);
-    
-        // Remove all interest entries for this peer since they are not interested in any pieces.
+
+        // Remove all interest entries for this peer since they are not interested in
+        // any pieces.
         interestManager.removeAllInterestedPieces(peerId);
         System.out.println("Peer " + peerId + " is not interested in any more pieces.");
     }
-    
+
     // This method will compare the bitfields of this peer and another peer
     // to find out which pieces the other peer has that this peer doesn't.
     private Set<Integer> getInterestingPieces(int peerId) {
@@ -178,7 +209,7 @@ public class PeerHandler implements Runnable {
         // Todo fix this string bs cause might get an error here
         BitSet myBitfield = pieceAvailability.get(getPeerIdFromSocket(peerSocket)); // own bitfield
         BitSet otherPeerBitfield = pieceAvailability.get(peerId); // The other peer's bitfield
-    
+
         Set<Integer> interestingPieces = new HashSet<>();
         if (otherPeerBitfield != null) {
             // Here we go through each bit in the other peer's bitfield.
@@ -195,11 +226,11 @@ public class PeerHandler implements Runnable {
     private void handleHave(byte[] message) {
         int pieceIndex = ByteBuffer.wrap(Arrays.copyOfRange(message, 1, 5)).getInt();
         fileManager.updateHave(pieceIndex);
-    
+
         int remotePeerID = getPeerIdFromSocket(peerSocket);
         BitSet peerBitfield = pieceAvailability.get(remotePeerID);
         peerBitfield.set(pieceIndex);
-    
+
         Set<Integer> interestingPieces = getInterestingPieces(remotePeerID);
         if (!interestingPieces.isEmpty()) {
             sendInterestedMessage();
@@ -207,7 +238,6 @@ public class PeerHandler implements Runnable {
             sendNotInterestedMessage();
         }
     }
-    
 
     private void handleBitfield(byte[] messageBytes) {
         BitSet receivedBitfield = message.parseBitfieldMessage(messageBytes);
@@ -240,6 +270,7 @@ public class PeerHandler implements Runnable {
             System.err.println("Error sending not interested message: " + e.getMessage());
         }
     }
+
     private void handleRequest(byte[] message) {
         // Extract the requested piece index from the message
         requestedPieceIndex = ByteBuffer.wrap(Arrays.copyOfRange(message, 1, 5)).getInt();
