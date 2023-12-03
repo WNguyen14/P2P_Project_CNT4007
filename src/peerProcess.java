@@ -9,6 +9,7 @@ import java.util.BitSet;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Scanner;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ExecutorService;
 import java.io.FileNotFoundException;
@@ -87,7 +88,7 @@ public class peerProcess {
                             configInfo.getPieceSize(),
                             configInfo.getConfigFileName(),
                             myPeerInfo.getContainsFile());
-    
+
                     // Pass the interestManager instance to the PeerHandler
                     executor.submit(new PeerHandler(clientSocket, fm, interestManager));
                 } catch (IOException e) {
@@ -119,6 +120,13 @@ public class peerProcess {
                 try {
                     Socket peerSocket = new Socket(info.getPeerAddress(), info.getPeerPort());
                     // TODO: Handle the peer socket, e.g., handshake, bitfield exchange
+                    FileManager fm = new FileManager(
+                            configInfo.getFileSize(),
+                            configInfo.getPieceSize(),
+                            configInfo.getConfigFileName(),
+                            myPeerInfo.getContainsFile());
+                    executor.execute(new PeerHandler(peerSocket, fm, interestManager));
+
                 } catch (IOException e) {
                     e.printStackTrace();
                 }

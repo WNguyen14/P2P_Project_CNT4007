@@ -160,6 +160,7 @@ public class PeerHandler implements Runnable {
         String peerId = getPeerIdFromSocket(peerSocket); // You'll need to implement this method based on your code
                                                          // structure
         interestManager.addInterestedPeer(peerId, requestedPieceIndex);
+
         System.out.println("Peer " + peerId + " is interested.");
     }
 
@@ -170,6 +171,7 @@ public class PeerHandler implements Runnable {
                                                          // structure
         interestManager.removeInterestedPeer(peerId, requestedPieceIndex); // You will need to determine the correct
                                                                            // piece index based on your protocol
+
         System.out.println("Peer " + peerId + " is not interested.");
     }
 
