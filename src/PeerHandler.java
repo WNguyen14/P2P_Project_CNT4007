@@ -12,18 +12,20 @@ public class PeerHandler implements Runnable {
     private Socket peerSocket;
     private DataInputStream in;
     private DataOutputStream out;
-    private FileManager fileManager; // Assuming FileManager is properly implemented
-    private InterestManager interestManager; // Assume this is initialized elsewhere
-
-    // This map should be shared across all PeerHandler instances and filled when a
-    // connection is established
+    private FileManager fileManager;
+    private InterestManager interestManager;
+    private boolean chokedByPeer = false;
     private static final Map<Socket, String> socketToPeerIdMap = new ConcurrentHashMap<>();
+    
+    // Variable to store the piece index requested by this peer
+    private int requestedPieceIndex;
 
-    public PeerHandler(Socket socket, FileManager fileManager) throws IOException {
+    public PeerHandler(Socket socket, FileManager fileManager, InterestManager interestManager) throws IOException {
         this.peerSocket = socket;
         this.in = new DataInputStream(peerSocket.getInputStream());
         this.out = new DataOutputStream(peerSocket.getOutputStream());
-        this.fileManager = fileManager; // Use the FileManager passed from peerProcess
+        this.fileManager = fileManager;
+        this.interestManager = interestManager;
     }
 
     private String getPeerIdFromSocket(Socket socket) {
@@ -129,14 +131,14 @@ public class PeerHandler implements Runnable {
     private void handleInterested() {
         // When a peer sends an 'interested' message, it means they want pieces from us
         String peerId = getPeerIdFromSocket(peerSocket); // You'll need to implement this method based on your code structure
-        interestManager.addInterestedPeer(peerId, /* pieceIndex */); // You will need to determine the correct piece index based on your protocol
+        interestManager.addInterestedPeer(peerId, requestedPieceIndex); 
         System.out.println("Peer " + peerId + " is interested.");
     }
 
     private void handleNotInterested() {
         // When a peer sends a 'not interested' message, they don't want any more pieces from us
         String peerId = getPeerIdFromSocket(peerSocket); // You'll need to implement this method based on your code structure
-        interestManager.removeInterestedPeer(peerId, /* pieceIndex */); // You will need to determine the correct piece index based on your protocol
+        interestManager.removeInterestedPeer(peerId, requestedPieceIndex); // You will need to determine the correct piece index based on your protocol
         System.out.println("Peer " + peerId + " is not interested.");
     }
 
@@ -155,15 +157,26 @@ public class PeerHandler implements Runnable {
     }
 
     private void handleRequest(byte[] message) {
-        // Implement request logic, sending a piece back if not choked
-        int pieceIndex = ByteBuffer.wrap(Arrays.copyOfRange(message, 1, 5)).getInt();
-        try {
-            fileManager.sendPiece(pieceIndex, out);
-        } catch (IOException e) {
-            System.err.println("IOException occurred while sending a piece: " + e.getMessage());
-            // Handle exception by logging or sending a different message
+        // Extract the requested piece index from the message
+        requestedPieceIndex = ByteBuffer.wrap(Arrays.copyOfRange(message, 1, 5)).getInt();
+        // Perform the rest of the request logic, potentially sending a piece back
+        sendRequestedPiece();
+    }
+
+    private void sendRequestedPiece() {
+        if (!chokedByPeer) {
+            try {
+                fileManager.sendPiece(requestedPieceIndex, out);
+            } catch (IOException e) {
+                System.err.println("IOException occurred while sending piece " + requestedPieceIndex + ": " + e.getMessage());
+                // Handle exception by logging or sending a different message
+            }
+        } else {
+            System.out.println("Cannot send piece " + requestedPieceIndex + " as we are choked by the peer.");
         }
     }
+
+    
 
     private void handlePiece(byte[] message) {
         // Implement piece logic, storing the received piece
