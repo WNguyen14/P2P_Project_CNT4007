@@ -2,6 +2,8 @@
 This class provides the peer information that is obtained from PeerInfo.cfg
  */
 
+import java.util.concurrent.atomic.AtomicLong;
+
 public class peerInfo {
 
 	private String peerID;
@@ -9,6 +11,9 @@ public class peerInfo {
 	private int peerPort;
 	private boolean containsFile;
 	private boolean choked;
+
+	private AtomicLong downloadedBytes = new AtomicLong(0);
+	private long lastMeasuredTime = System.currentTimeMillis();
 
 	public peerInfo(String peerID, String peerAddress, String peerPort, String containsFile) {
 		setPeerID(peerID);
@@ -50,18 +55,21 @@ public class peerInfo {
 		return containsFile;
 	}
 
-
-	public boolean IsChoked() {
-		return choked;
+	// Method to update the downloaded bytes
+	public void updateDownloadedBytes(long bytes) {
+		downloadedBytes.addAndGet(bytes);
 	}
 
-	public void choke()
-	{
-		this.choked = true;
+	// Method to get the download speed in bytes per second
+	public double getDownloadSpeed() {
+		long currentTime = System.currentTimeMillis();
+		long timeDiff = currentTime - lastMeasuredTime;
+		if (timeDiff == 0)
+			return 0.0;
+		double speed = downloadedBytes.get() / ((double) timeDiff / 1000);
+		downloadedBytes.set(0);
+		lastMeasuredTime = currentTime;
+		return speed;
 	}
 
-	public void unchoke()
-	{
-		this.choked = false;
-	}
 }

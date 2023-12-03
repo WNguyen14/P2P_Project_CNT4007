@@ -7,8 +7,6 @@ import java.util.concurrent.TimeUnit;
  public class chokeHandler {
      //initialize variables
      private List<String> unchoked;
-     private ScheduledFuture<?> job = null;
-     private ScheduledExecutorService timer = null;
      public List<String> interestedNeighbors;
 
      private int unchokingInterval;
