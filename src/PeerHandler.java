@@ -5,7 +5,9 @@ import java.net.Socket;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.BitSet;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class PeerHandler implements Runnable {
@@ -15,10 +17,7 @@ public class PeerHandler implements Runnable {
     private FileManager fileManager;
     private InterestManager interestManager;
     private boolean chokedByPeer = false;
-    private static final Map<Socket, String> socketToPeerIdMap = new ConcurrentHashMap<>();
-    
-    // Kinda bs but I'm not sure how else to do this
-    private String peerID;
+    private static final Map<Socket, Integer> socketToPeerIdMap = new ConcurrentHashMap<>();
 
     // Variable to store the piece index requested by this peer
     private int requestedPieceIndex;
@@ -31,76 +30,51 @@ public class PeerHandler implements Runnable {
         this.interestManager = interestManager;
     }
 
-    private String getPeerIdFromSocket(Socket socket) {
-        return socketToPeerIdMap.get(socket);
+    private int getPeerIdFromSocket(Socket socket) {
+        return socketToPeerIdMap.getOrDefault(socket, -1);
     }
-
-    public String getPeerID() {
-        return this.peerID;
-    }
-    
 
     @Override
     public void run() {
         try {
-            // Initial handshake and bitfield exchange.
             performHandshake();
 
-            // Normal operation (receiving messages and responding accordingly)
             while (true) {
                 if (peerSocket.isClosed()) {
                     break;
                 }
 
-                // Read message
                 int length = in.readInt();
                 if (length > 0) {
                     byte[] message = new byte[length];
-                    in.readFully(message); // Read the message
-
+                    in.readFully(message);
                     handleMessage(message);
                 }
             }
         } catch (IOException e) {
             System.err.println("Error in PeerHandler: " + e.getMessage());
-            // Handle exception
         } finally {
-            // Clean up resources
-            try {
-                if (in != null)
-                    in.close();
-                if (out != null)
-                    out.close();
-                if (peerSocket != null)
-                    peerSocket.close();
-            } catch (IOException e) {
-                // Handle closing exception
-            }
+            cleanUpResources();
         }
     }
 
     private void performHandshake() throws IOException {
-        // Create handshake message
-        handshake myHandshake = new handshake(this.peerID);
+        handshake myHandshake = new handshake(getPeerIdFromSocket(peerSocket));
         byte[] handshakeMessage = myHandshake.createHandshake();
-    
-        // Send handshake message
+
         out.write(handshakeMessage);
         out.flush();
-    
-        // Wait for the handshake response
-        byte[] response = new byte[handshake.getHeader().length() + handshake.getZeroBitsLength() + handshake.getPeerIdLength()];
-        in.readFully(response); // Read the full handshake message
-    
-        // Read the handshake message and extract the peerID from the response
-        String remotePeerID = handshake.readHandshake(response);
-        socketToPeerIdMap.put(peerSocket, remotePeerID); // Use the socket to map to the peerID
-    
-        // Log or do additional actions based on the successful handshake
+
+        byte[] response = new byte[32];
+        in.readFully(response);
+
+        int remotePeerID = handshake.readHandshake(response);
+        if (remotePeerID == getPeerIdFromSocket(peerSocket)) {
+            throw new IOException("Connected to self.");
+        }
+        socketToPeerIdMap.put(peerSocket, remotePeerID);
         System.out.println("Handshake successful with peer: " + remotePeerID);
     }
-    
-    
 
     private void handleMessage(byte[] message) throws IOException {
         // Parse the message type
@@ -156,21 +130,34 @@ public class PeerHandler implements Runnable {
     }
 
     private void handleInterested() {
-        // When a peer sends an 'interested' message, it means they want pieces from us
-        String peerId = getPeerIdFromSocket(peerSocket); // You'll need to implement this method based on your code
-                                                         // structure
-        interestManager.addInterestedPeer(peerId, requestedPieceIndex);
+        int peerId = getPeerIdFromSocket(peerSocket);
+        // Logic to determine which pieces are interesting to this peer
+        // For example, check against the bitfield to see if we have pieces that the
+        // other peer is interested in
+        // Add those piece indices to the interest manager
+        for (int pieceIndex : getInterestingPieces(peerId)) {
+            interestManager.addInterestedPeer(peerId, pieceIndex);
+        }
         System.out.println("Peer " + peerId + " is interested.");
     }
 
     private void handleNotInterested() {
-        // When a peer sends a 'not interested' message, they don't want any more pieces
-        // from us
-        String peerId = getPeerIdFromSocket(peerSocket); // You'll need to implement this method based on your code
-                                                         // structure
-        interestManager.removeInterestedPeer(peerId, requestedPieceIndex); // You will need to determine the correct
-                                                                           // piece index based on your protocol
+        int peerId = getPeerIdFromSocket(peerSocket);
+        // Remove all entries for this peer from the interest manager, as they are not
+        // interested in any pieces
+        interestManager.removeAllInterestedPieces(peerId);
         System.out.println("Peer " + peerId + " is not interested.");
+    }
+
+    // Additional helper method to determine interesting pieces
+    private Set<Integer> getInterestingPieces(int peerId) {
+        // Implement logic to determine interesting pieces based on bitfields
+        Set<Integer> interestingPieces = new HashSet<>();
+        // Example logic:
+        // if (/* condition to check if piece is interesting */) {
+        // interestingPieces.add(/* piece index */);
+        // }
+        return interestingPieces;
     }
 
     private void handleHave(byte[] message) {
@@ -208,6 +195,7 @@ public class PeerHandler implements Runnable {
         }
     }
 
+    // I need validation on this
     private void handlePiece(byte[] message) {
         // Implement piece logic, storing the received piece
         int pieceIndex = ByteBuffer.wrap(Arrays.copyOfRange(message, 1, 5)).getInt();
@@ -218,5 +206,18 @@ public class PeerHandler implements Runnable {
     // Helper methods to extract message type and other information from the message
     public char getMessageTypeFromMessage(byte[] message) {
         return (char) message[0]; // Assuming message type is the first byte
+    }
+
+    private void cleanUpResources() {
+        try {
+            if (in != null)
+                in.close();
+            if (out != null)
+                out.close();
+            if (peerSocket != null)
+                peerSocket.close();
+        } catch (IOException e) {
+            System.err.println("Error closing resources: " + e.getMessage());
+        }
     }
 }
