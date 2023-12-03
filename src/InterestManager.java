@@ -2,6 +2,7 @@ import java.util.Set;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 public class InterestManager {
     private final Map<Integer, Set<Integer>> interestedPeers;
@@ -29,9 +30,22 @@ public class InterestManager {
         return interestedPeers.values().stream().anyMatch(set -> set.contains(pieceIndex));
     }
 
-    // Additional methods can be added here for managing the interest map
-    // Example: Method to check if a peer is interested in any piece
+    
     public boolean isPeerInterested(int peerId) {
         return interestedPeers.containsKey(peerId) && !interestedPeers.get(peerId).isEmpty();
     }
+
+     // This method returns a set of peer IDs that are interested in any of the pieces
+    // of the peer with the given peerId
+    public Set<Integer> getPeersInterestedIn(int peerId) {
+        // We check each entry in the map to see if it contains the pieceIndex
+        return interestedPeers.entrySet().stream()
+                .filter(entry -> entry.getValue().contains(peerId))
+                .map(Map.Entry::getKey)
+                .collect(Collectors.toSet());
+    }
+
+
+    
+    
 }

@@ -145,34 +145,48 @@ public class PeerHandler implements Runnable {
 
     private void handleInterested() {
         int peerId = getPeerIdFromSocket(peerSocket);
-        // Logic to determine which pieces are interesting to this peer
-        // For example, check against the bitfield to see if we have pieces that the
-        // other peer is interested in
-        // Add those piece indices to the interest manager
-        for (int pieceIndex : getInterestingPieces(peerId)) {
-            interestManager.addInterestedPeer(peerId, pieceIndex);
+    
+        // Assuming getInterestingPieces returns the indices of the pieces that
+        // this peer has and the other peer doesn't. This should be based on comparing
+        // the two bitfields: the current peer's and the other peer's.
+        Set<Integer> interestingPieces = getInterestingPieces(peerId);
+    
+        // If there are interesting pieces, mark the peer as interested in those pieces.
+        if (!interestingPieces.isEmpty()) {
+            for (int pieceIndex : interestingPieces) {
+                interestManager.addInterestedPeer(peerId, pieceIndex);
+            }
+            System.out.println("Peer " + peerId + " is interested in pieces: " + interestingPieces);
+        } else {
+            // If there are no interesting pieces, handle as not interested.
+            handleNotInterested(); // You can call this directly if no interesting pieces.
         }
-        System.out.println("Peer " + peerId + " is interested.");
     }
-
+    
     private void handleNotInterested() {
         int peerId = getPeerIdFromSocket(peerSocket);
-        // Remove all entries for this peer from the interest manager, as they are not
-        // interested in any pieces
+    
+        // Remove all interest entries for this peer since they are not interested in any pieces.
         interestManager.removeAllInterestedPieces(peerId);
-        System.out.println("Peer " + peerId + " is not interested.");
+        System.out.println("Peer " + peerId + " is not interested in any more pieces.");
     }
-
+    
+    // This method will compare the bitfields of this peer and another peer
+    // to find out which pieces the other peer has that this peer doesn't.
     private Set<Integer> getInterestingPieces(int peerId) {
 
-        // idk
-        BitSet myBitfield = pieceAvailability.get(Integer.toString(getPeerIdFromSocket(peerSocket))); // The bitfield of the current peer
-        BitSet peerBitfield = pieceAvailability.get(Integer.toString(peerId)); // The bitfield of the peer we're interested in
-
+        // Todo fix this string bs cause might get an error here
+        BitSet myBitfield = pieceAvailability.get(Integer.toString(getPeerIdFromSocket(peerSocket))); // Your own bitfield
+        BitSet otherPeerBitfield = pieceAvailability.get(Integer.toString(peerId)); // The other peer's bitfield
+    
         Set<Integer> interestingPieces = new HashSet<>();
-        for (int i = 0; i < peerBitfield.length(); i++) {
-            if (peerBitfield.get(i) && !myBitfield.get(i)) {
-                interestingPieces.add(i);
+        if (otherPeerBitfield != null) {
+            // Here we go through each bit in the other peer's bitfield.
+            for (int i = 0; i < myBitfield.length(); i++) {
+                // If the other peer has a piece that we don't, it's interesting to us.
+                if (otherPeerBitfield.get(i) && !myBitfield.get(i)) {
+                    interestingPieces.add(i);
+                }
             }
         }
         return interestingPieces;
