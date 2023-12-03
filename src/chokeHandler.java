@@ -22,7 +22,7 @@ import java.util.stream.Collectors;
         unchokingInterval = Interval;
         numPreferred = pref;
         allPeerInfo = a;
-        this.interestManager = interestManager; // Initialize InterestManager
+        this.interestManager = interestManager; 
     }
      public void start() {
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
