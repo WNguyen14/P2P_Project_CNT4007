@@ -7,13 +7,13 @@ import java.util.concurrent.atomic.AtomicLong;
 public class peerInfo {
 
 	private String peerID;
-	private String peerAddress;
-	private int peerPort;
-	private boolean containsFile;
-	private boolean choked;
+    private String peerAddress;
+    private int peerPort;
+    private boolean containsFile;
+    private boolean choked = true; 
 
-	private AtomicLong downloadedBytes = new AtomicLong(0);
-	private long lastMeasuredTime = System.currentTimeMillis();
+    private AtomicLong downloadedBytes = new AtomicLong(0);
+    private long lastMeasuredTime = System.currentTimeMillis();
 
 	public peerInfo(String peerID, String peerAddress, String peerPort, String containsFile) {
 		setPeerID(peerID);
@@ -54,6 +54,18 @@ public class peerInfo {
 	public boolean getContainsFile() {
 		return containsFile;
 	}
+
+	public void choke() {
+        this.choked = true;
+    }
+
+    public void unchoke() {
+        this.choked = false;
+    }
+
+    public boolean isChoked() {
+        return choked;
+    }
 
 	// Method to update the downloaded bytes
 	public void updateDownloadedBytes(long bytes) {
