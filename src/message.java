@@ -2,8 +2,10 @@
 class to do work on messages (not handshake messages)
  */
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.BitSet;
 
 public class message {
 
@@ -29,6 +31,24 @@ public class message {
 		}
 		return s.toByteArray();
 	}
+
+	public static byte[] createBitfieldMessage(BitSet bitfield) {
+        byte[] bitfieldArray = bitfield.toByteArray();
+        byte[] header = ByteBuffer.allocate(5).putInt(1 + bitfieldArray.length).put((byte) '5').array();
+        ByteArrayOutputStream messageStream = new ByteArrayOutputStream();
+        try {
+            messageStream.write(header);
+            messageStream.write(bitfieldArray);
+        } catch (IOException e) {
+            throw new RuntimeException("Error creating bitfield message", e);
+        }
+        return messageStream.toByteArray();
+    }
+
+    public static BitSet parseBitfieldMessage(byte[] message) {
+        return BitSet.valueOf(Arrays.copyOfRange(message, 5, message.length));
+    }
+
 
 	public int getMessageLengthFromMessage(byte[] message) {
 		byte[] bytes = Arrays.copyOfRange(message, 0, 3);
