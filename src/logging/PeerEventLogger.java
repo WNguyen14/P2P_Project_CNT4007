@@ -128,4 +128,27 @@ public class PeerEventLogger {
             }
         }
     }
+
+    //logs a message when a peer is choked
+    public static void peerChoked(int peerId, int neighborId) {
+        if (Logger.getCurrentLogLevel().ordinal() <= Logger.LogLevel.INFO.ordinal()) {
+            try {
+                String message = String.format("[Time]: Peer [%d] is choked by [%d]", peerId, neighborId);
+                LogWriter.writeToFile("log_peer_"+peerId+".log", message);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+    //log message when peer unchoked
+    public static void peerUnchoked(int peerId, int neighborId) {
+        if (Logger.getCurrentLogLevel().ordinal() <= Logger.LogLevel.INFO.ordinal()) {
+            try {
+                String message = String.format("[Time]: Peer [%d] is unchoked by [%d]", peerId, neighborId);
+                LogWriter.writeToFile("log_peer_"+peerId+".log", message);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
 }
