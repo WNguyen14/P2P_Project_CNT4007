@@ -30,7 +30,7 @@ public class peerProcess {
     private ServerSocket serverSocket;
     private ExecutorService executor;
 
-    private static final Map<Socket, String> socketToPeerIdMap = new ConcurrentHashMap<>();
+    private static final Map<Socket, Integer> socketToPeerIdMap = new ConcurrentHashMap<>();
 
 
     private InterestManager interestManager = new InterestManager();
@@ -53,7 +53,7 @@ public class peerProcess {
         this.myPeerID = myPeerID;
         this.configInfo = new Config("Common.cfg");
         this.allPeerInfo = makePeerInfo("PeerInfo.cfg");
-        this.myPeerInfo = allPeerInfo.get(myPeerID);
+        this.myPeerInfo = allPeerInfo.get(Integer.toString(myPeerID));
         this.pieceAvailability = new HashMap<>();
         this.executor = Executors.newCachedThreadPool();
 
@@ -83,7 +83,7 @@ public class peerProcess {
                     // Determine the peer ID after the handshake
                     int peerId = determinePeerId(clientSocket);
                     // Store peerId as an Integer in socketToPeerIdMap
-                    socketToPeerIdMap.put(clientSocket, Integer.toString(peerId));
+                    socketToPeerIdMap.put(clientSocket, peerId);
     
                     FileManager fm = new FileManager(
                             configInfo.getFileSize(),
@@ -136,7 +136,7 @@ private void connectToPreviousPeers() {
                 }
                 
                 // Store the handshake information
-                socketToPeerIdMap.put(peerSocket, Integer.toString(receivedPeerID));
+                socketToPeerIdMap.put(peerSocket, receivedPeerID);
                 
                 // Pass the interestManager instance to the PeerHandler
                 FileManager fm = new FileManager(configInfo.getFileSize(), configInfo.getPieceSize(), configInfo.getConfigFileName(), myPeerInfo.getContainsFile());
