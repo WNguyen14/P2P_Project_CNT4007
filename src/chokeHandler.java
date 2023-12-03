@@ -3,6 +3,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
  public class chokeHandler {
      //initialize variables
@@ -15,12 +16,14 @@ import java.util.concurrent.TimeUnit;
      //make a hashmap and grab peerInfo from peerProcess
      private HashMap<String, peerInfo> allPeerInfo;
      
-     public chokeHandler(int Interval, int pref, HashMap<String, peerInfo> a){
-        unchokingInterval = Interval;
-        numPreferred = pref; 
-        allPeerInfo = a;
-     }
+     private InterestManager interestManager;
 
+     public chokeHandler(int Interval, int pref, HashMap<String, peerInfo> a, InterestManager interestManager) {
+        unchokingInterval = Interval;
+        numPreferred = pref;
+        allPeerInfo = a;
+        this.interestManager = interestManager; // Initialize InterestManager
+    }
      public void start() {
         ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
         //schedule to run the chokeUnchoke function every unchokingInterval seconds
@@ -45,10 +48,14 @@ import java.util.concurrent.TimeUnit;
             String key = entry.getKey();
             peerInfo value = entry.getValue();
             //list interested neighbors using interestmanager
-            interestedNeighbors = InterestManager.getPeersInterestedIn(Integer.valueOf(value.getPeerID()));
-            //out of the interested neighbors, find the one with the fastest download speed
-            Collections.sort(interestedNeighbors, Comparator.comparingInt(0).reversed());
-            List<String> preferredNeighbors = interestedNeighbors.subList(0, numPreferred);
+            Set<Integer> interestedPeers = interestManager.getPeersInterestedIn(Integer.parseInt(value.getPeerID()));
+            interestedNeighbors = interestedPeers.stream()
+                                    .map(Object::toString)
+                                    .collect(Collectors.toList());
+
+            Collections.sort(interestedNeighbors, Comparator.comparing(peerId -> allPeerInfo.get(peerId).getDownloadSpeed()).reversed());
+            List<String> preferredNeighbors = new ArrayList<>(interestedNeighbors.subList(0, Math.min(numPreferred, interestedNeighbors.size())));
+
             //unchoke all preferred neighbors
             for (String neighbor : preferredNeighbors) {
                 if (!unchoked.contains(neighbor)) {
