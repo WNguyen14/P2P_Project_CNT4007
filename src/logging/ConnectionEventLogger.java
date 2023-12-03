@@ -129,4 +129,19 @@ public class ConnectionEventLogger {
             }
         }
     }
+
+    // More logging methods can be added 
+
+    public static void dataRequestSent(int requesterPeerId, int receiverPeerId, int pieceIndex) {
+        try {
+            String message = String.format("[Time]: Peer [%d] sends a data request for piece [%d] to Peer [%d]", 
+                                            requesterPeerId, pieceIndex, receiverPeerId);
+            LogWriter.writeToFile("log_peer_" + requesterPeerId + ".log", message);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+    
+    
+
 }

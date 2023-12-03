@@ -15,6 +15,7 @@ import logging.Logger;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.util.Arrays;
+import errorhandling.P2PFileSharingException;
 
 /**
  * The main class for starting and managing peer processes in a P2P network.
@@ -38,7 +39,7 @@ public class peerProcess {
     public static void main(String[] args) {
         try {
             if (args.length != 1) {
-                System.out.println("Usage: java peerProcess <peerID>");
+                Logger.error("Usage: java peerProcess <peerID>");
                 return;
             }
             int peerID = Integer.parseInt(args[0]);
@@ -49,14 +50,18 @@ public class peerProcess {
         }
     }
 
-    public peerProcess(int myPeerID) throws FileNotFoundException {
+    public peerProcess(int myPeerID) throws FileNotFoundException, P2PFileSharingException {
         this.myPeerID = myPeerID;
-        this.configInfo = new Config("Common.cfg");
-        this.allPeerInfo = makePeerInfo("PeerInfo.cfg");
-        this.myPeerInfo = allPeerInfo.get(Integer.toString(myPeerID));
-        this.pieceAvailability = new HashMap<>();
-        this.executor = Executors.newCachedThreadPool();
-        Logger.info("Peer process for peerID %d created", myPeerID);
+        try {
+            this.configInfo = new Config("Common.cfg");
+            this.allPeerInfo = makePeerInfo("PeerInfo.cfg");
+            this.myPeerInfo = allPeerInfo.get(Integer.toString(myPeerID));
+            this.pieceAvailability = new HashMap<>();
+            this.executor = Executors.newCachedThreadPool();
+            Logger.info("Peer process for peerID %d created", myPeerID);
+        } catch (FileNotFoundException e) {
+            throw new P2PFileSharingException("Config file not found", P2PFileSharingException.ErrorType.FILE_ERROR, e);
+        }
     }
 
     private void start() throws IOException {
@@ -89,10 +94,15 @@ public class peerProcess {
     }
 
     private int determinePeerId(Socket socket) throws IOException {
-        DataInputStream in = new DataInputStream(socket.getInputStream());
-        byte[] handshake = new byte[32];
-        in.readFully(handshake);
-        return ByteBuffer.wrap(Arrays.copyOfRange(handshake, 28, 32)).getInt();
+        try {
+            DataInputStream in = new DataInputStream(socket.getInputStream());
+            byte[] handshake = new byte[32];
+            in.readFully(handshake);
+            return ByteBuffer.wrap(Arrays.copyOfRange(handshake, 28, 32)).getInt();
+        } catch (IOException e) {
+            Logger.error("Error in handshake: %s", e.getMessage());
+            throw e;
+        }
     }
 
     private void connectToPreviousPeers() {
@@ -109,34 +119,44 @@ public class peerProcess {
     }
 
     private void connectToPeer(peerInfo info) throws IOException {
-        Socket peerSocket = new Socket(info.getPeerAddress(), info.getPeerPort());
-        handshake hs = new handshake(myPeerID);
-        DataOutputStream out = new DataOutputStream(peerSocket.getOutputStream());
-        out.write(hs.createHandshake());
-        out.flush();
-        DataInputStream in = new DataInputStream(peerSocket.getInputStream());
-        byte[] response = new byte[32];
-        in.readFully(response);
-        int receivedPeerID = ByteBuffer.wrap(Arrays.copyOfRange(response, 28, 32)).getInt();
-        if (receivedPeerID != Integer.parseInt(info.getPeerID())) {
-            throw new IOException("Incorrect peer ID received in handshake");
+        try {
+            Socket peerSocket = new Socket(info.getPeerAddress(), info.getPeerPort());
+            handshake hs = new handshake(myPeerID);
+            DataOutputStream out = new DataOutputStream(peerSocket.getOutputStream());
+            out.write(hs.createHandshake());
+            out.flush();
+            DataInputStream in = new DataInputStream(peerSocket.getInputStream());
+            byte[] response = new byte[32];
+            in.readFully(response);
+            int receivedPeerID = ByteBuffer.wrap(Arrays.copyOfRange(response, 28, 32)).getInt();
+            if (receivedPeerID != Integer.parseInt(info.getPeerID())) {
+                throw new IOException("Incorrect peer ID received in handshake");
+            }
+            socketToPeerIdMap.put(peerSocket, receivedPeerID);
+            FileManager fm = new FileManager(configInfo.getFileSize(), configInfo.getPieceSize(), configInfo.getConfigFileName(), myPeerInfo.getContainsFile());
+            executor.submit(new PeerHandler(peerSocket, fm, interestManager, pieceAvailability));
+            Logger.info("Connected to peer %d", receivedPeerID);
+        } catch (IOException e) {
+            Logger.error("Error in peer connection: %s", e.getMessage());
+            throw e;
         }
-        socketToPeerIdMap.put(peerSocket, receivedPeerID);
-        FileManager fm = new FileManager(configInfo.getFileSize(), configInfo.getPieceSize(), configInfo.getConfigFileName(), myPeerInfo.getContainsFile());
-        executor.submit(new PeerHandler(peerSocket, fm, interestManager, pieceAvailability));
-        Logger.info("Connected to peer %d", receivedPeerID);
     }
 
     public HashMap<String, peerInfo> makePeerInfo(String fileName) throws FileNotFoundException {
-        Scanner in = new Scanner(new FileReader(fileName));
-        HashMap<String, peerInfo> peersMap = new HashMap<>();
-        while (in.hasNextLine()) {
-            String[] line = in.nextLine().split(" ");
-            peerInfo newPeer = new peerInfo(line[0], line[1], line[2], line[3]);
-            peersMap.put(line[0], newPeer);
+        try {
+            Scanner in = new Scanner(new FileReader(fileName));
+            HashMap<String, peerInfo> peersMap = new HashMap<>();
+            while (in.hasNextLine()) {
+                String[] line = in.nextLine().split(" ");
+                peerInfo newPeer = new peerInfo(line[0], line[1], line[2], line[3]);
+                peersMap.put(line[0], newPeer);
+            }
+            in.close();
+            return peersMap;
+        } catch (FileNotFoundException e) {
+            Logger.error("Error reading PeerInfo.cfg: %s", e.getMessage());
+            throw e;
         }
-        in.close();
-        return peersMap;
     }
 
     private void initPieces() {

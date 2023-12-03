@@ -151,4 +151,15 @@ public class PeerEventLogger {
             }
         }
     }
+
+
+    public static void logPeerCommunicationError(int peerId, Exception e) {
+        try {
+            String message = String.format("[Time]: Communication error in Peer [%d]: %s", peerId, e.getMessage());
+            LogWriter.writeToFile("log_peer_" + peerId + ".log", message);
+        } catch (IOException ex) {
+            ex.printStackTrace();
+        }
+    }
+    
 }

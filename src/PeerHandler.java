@@ -10,11 +10,9 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-
 import logging.ConnectionEventLogger;
 import logging.PeerEventLogger;
-import java.io.File;
-import java.io.RandomAccessFile;
+import errorhandling.P2PFileSharingException;
 
 public class PeerHandler implements Runnable {
     private Socket peerSocket;
@@ -24,11 +22,9 @@ public class PeerHandler implements Runnable {
     private InterestManager interestManager;
     private HashMap<Integer, BitSet> pieceAvailability;
     private boolean chokedByPeer = false;
-
     private static final Map<Socket, Integer> socketToPeerIdMap = new ConcurrentHashMap<>();
-
-    // Variable to store the piece index requested by this peer
     private int requestedPieceIndex;
+    private int remotePeerID;
 
     public PeerHandler(Socket socket, FileManager fileManager, InterestManager interestManager,
             HashMap<Integer, BitSet> pieceAvailability) throws IOException {
@@ -38,13 +34,6 @@ public class PeerHandler implements Runnable {
         this.fileManager = fileManager;
         this.interestManager = interestManager;
         this.pieceAvailability = pieceAvailability;
-
-        int peerId = getPeerIdFromSocket(socket);
-        File peerDir = new File("~/project/peer_" + peerId);
-        if (!peerDir.exists()) {
-            peerDir.mkdirs(); // Create directory if it doesn't exist
-        }
-        // Additional initialization for file handling based on the directory
     }
 
     private int getPeerIdFromSocket(Socket socket) {
@@ -55,12 +44,10 @@ public class PeerHandler implements Runnable {
     public void run() {
         try {
             performHandshake();
-
             while (true) {
                 if (peerSocket.isClosed()) {
                     break;
                 }
-
                 int length = in.readInt();
                 if (length > 0) {
                     byte[] message = new byte[length];
@@ -70,46 +57,54 @@ public class PeerHandler implements Runnable {
             }
         } catch (IOException e) {
             System.err.println("Error in PeerHandler: " + e.getMessage());
+            // Handle error related to peer communication
+            // Log this error
+            PeerEventLogger.logPeerCommunicationError(getPeerIdFromSocket(peerSocket), e);
+        } catch (P2PFileSharingException e) {
+            System.err.println("Error in PeerHandler: " + e.getMessage());
+            // Handle P2PFileSharingException
+            // Log this error
+            PeerEventLogger.logPeerCommunicationError(getPeerIdFromSocket(peerSocket), e);
         } finally {
             cleanUpResources();
         }
     }
 
-    // In PeerHandler.java
-    private void performHandshake() throws IOException {
-        // Create a handshake object with the current peer's ID
-        handshake myHandshake = new handshake(getPeerIdFromSocket(peerSocket));
-
-        // Send the handshake message
-        out.write(myHandshake.createHandshake());
-        out.flush();
-
-        // Read the handshake response
-        byte[] response = new byte[32];
-        in.readFully(response);
-
-        // Extract the peer ID from the response
-        int remotePeerID = ByteBuffer.wrap(Arrays.copyOfRange(response, 28, 32)).getInt();
-
-        // Check if the handshake is self-connection
-        if (remotePeerID == getPeerIdFromSocket(peerSocket)) {
-            throw new IOException("Connected to self.");
+    private void performHandshake() throws P2PFileSharingException {
+        try {
+            handshake myHandshake = new handshake(getPeerIdFromSocket(peerSocket));
+            out.write(myHandshake.createHandshake());
+            out.flush();
+    
+            byte[] response = new byte[32];
+            in.readFully(response);
+    
+            int remotePeerID = ByteBuffer.wrap(Arrays.copyOfRange(response, 28, 32)).getInt();
+            if (remotePeerID == getPeerIdFromSocket(peerSocket)) {
+                throw new IOException("Connected to self.");
+            }
+    
+            socketToPeerIdMap.put(peerSocket, remotePeerID);
+    
+            // Log connection
+            ConnectionEventLogger.peerConnected(getPeerIdFromSocket(peerSocket), remotePeerID);
+    
+            // Save remotePeerID as a field for future use
+            this.remotePeerID = remotePeerID;  // Add this as a private field in PeerHandler
+        } catch (IOException e) {
+            throw new P2PFileSharingException("Error during handshake",
+                    P2PFileSharingException.ErrorType.HANDSHAKE_ERROR, e);
         }
-
-        // Store the mapping of the socket to peer ID
-        socketToPeerIdMap.put(peerSocket, remotePeerID);
-
-        System.out.println("Handshake successful with peer: " + remotePeerID);
     }
-
-    private void handleMessage(byte[] message) throws IOException {
-        // Parse the message type
+    
+    private void handleMessage(byte[] message) throws P2PFileSharingException {
+    try {
         char messageType = getMessageTypeFromMessage(message);
         switch (messageType) {
-            case '0': // choke
+            case '0':
                 handleChoke();
                 break;
-            case '1': // unchoke
+            case '1':
                 handleUnchoke();
                 break;
             case '2': // interested
@@ -133,23 +128,25 @@ public class PeerHandler implements Runnable {
             default:
                 System.out.println("Unknown message type received: " + messageType);
         }
+    } catch (Exception e) {
+        throw new P2PFileSharingException("Error handling message: " + e.getMessage(), P2PFileSharingException.ErrorType.MESSAGE_ERROR, e);
     }
+}
 
-    // In PeerHandler.java
+
     private void handleChoke() {
         chokedByPeer = true;
-        // Additional logic when choked
-        System.out.println("Choked by peer " + getPeerIdFromSocket(peerSocket));
+        PeerEventLogger.peerChoked(getPeerIdFromSocket(peerSocket), remotePeerID);
     }
-
-    private void handleUnchoke() {
+    
+    private void handleUnchoke() throws P2PFileSharingException {
         chokedByPeer = false;
-        // Additional logic when unchoked (like requesting pieces)
-        System.out.println("Unchoked by peer " + getPeerIdFromSocket(peerSocket));
+        PeerEventLogger.peerUnchoked(getPeerIdFromSocket(peerSocket), remotePeerID);
         requestNeededPieces();
     }
+    
 
-    private void requestNeededPieces() {
+    private void requestNeededPieces() throws P2PFileSharingException {
         int peerId = getPeerIdFromSocket(peerSocket);
         BitSet myBitfield = fileManager.getBitfield();
         BitSet peerBitfield = pieceAvailability.get(peerId);
@@ -164,13 +161,13 @@ public class PeerHandler implements Runnable {
         }
     }
 
-    private void requestPiece(int pieceIndex) {
+    private void requestPiece(int pieceIndex) throws P2PFileSharingException {
         try {
-            // Creating a request message for the specified piece index
             byte[] requestMessage = createRequestMessage(pieceIndex);
             out.write(requestMessage);
+            ConnectionEventLogger.dataRequestSent(getPeerIdFromSocket(peerSocket), remotePeerID, pieceIndex);
         } catch (IOException e) {
-            System.err.println("Error sending request message for piece " + pieceIndex + ": " + e.getMessage());
+            throw new P2PFileSharingException("Error requesting piece: " + e.getMessage(), P2PFileSharingException.ErrorType.MESSAGE_ERROR, e);
         }
     }
 
@@ -304,13 +301,17 @@ public class PeerHandler implements Runnable {
         }
     }
 
-    // I need validation on this
-    private void handlePiece(byte[] message) {
-        // Implement piece logic, storing the received piece
-        int pieceIndex = ByteBuffer.wrap(Arrays.copyOfRange(message, 1, 5)).getInt();
-        byte[] pieceData = Arrays.copyOfRange(message, 5, message.length);
-        fileManager.storePiece(pieceIndex, pieceData);
+    private void handlePiece(byte[] message) throws P2PFileSharingException {
+        try {
+            int pieceIndex = ByteBuffer.wrap(Arrays.copyOfRange(message, 1, 5)).getInt();
+            byte[] pieceData = Arrays.copyOfRange(message, 5, message.length);
+            fileManager.storePiece(pieceIndex, pieceData);
+            PeerEventLogger.pieceDownloaded(getPeerIdFromSocket(peerSocket), remotePeerID, pieceIndex, pieceData.length);
+        } catch (Exception e) {
+            throw new P2PFileSharingException("Error handling piece message: " + e.getMessage(), P2PFileSharingException.ErrorType.FILE_ERROR, e);
+        }
     }
+    
 
     // Helper methods to extract message type and other information from the message
     public char getMessageTypeFromMessage(byte[] message) {
@@ -319,14 +320,13 @@ public class PeerHandler implements Runnable {
 
     private void cleanUpResources() {
         try {
-            if (in != null)
-                in.close();
-            if (out != null)
-                out.close();
-            if (peerSocket != null)
-                peerSocket.close();
+            if (in != null) in.close();
+            if (out != null) out.close();
+            if (peerSocket != null) peerSocket.close();
         } catch (IOException e) {
             System.err.println("Error closing resources: " + e.getMessage());
+            // Optionally, you might want to log this error as well
         }
     }
+    
 }
