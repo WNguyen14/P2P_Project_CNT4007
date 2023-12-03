@@ -96,7 +96,7 @@ public class peerProcess {
         });
     }
 
-    private HashMap<String, peerInfo> makePeerInfo(String fileName) throws FileNotFoundException {
+    public HashMap<String, peerInfo> makePeerInfo(String fileName) throws FileNotFoundException {
         Scanner in = new Scanner(new FileReader(fileName));
         HashMap<String, peerInfo> peersMap = new HashMap<>();
 

@@ -8,6 +8,7 @@ public class peerInfo {
 	private String peerAddress;
 	private int peerPort;
 	private boolean containsFile;
+	private boolean choked;
 
 	public peerInfo(String peerID, String peerAddress, String peerPort, String containsFile) {
 		setPeerID(peerID);
@@ -47,5 +48,25 @@ public class peerInfo {
 
 	public boolean getContainsFile() {
 		return containsFile;
+	}
+
+	public boolean IsInterested() {
+		
+	}
+
+	public boolean IsChoked() {
+		return choked;
+	}
+
+	public void chokeUnchoke()
+	{
+		if (this.IsChoked())
+		{
+			this.IsChoked = false;
+		}
+		else
+		{
+			this.IsChoked = true;
+		}
 	}
 }

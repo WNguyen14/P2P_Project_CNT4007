@@ -1,23 +1,64 @@
- import java.util.*;
+import java.util.*;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
- import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeUnit;
+import java.util.HashMap;
+import java.util.Map;
 
  public class chokeHandler {
      //initialize variables
      private Set<String> unchoked = new HashSet<String>();
      private ScheduledFuture<?> job = null;
      private ScheduledExecutorService timer = null;
+
      private int unchokingInterval;
      private int numPreferred;
-     private peerProcess optimisticUnchoked;
-
-     public void start() {
-         this.job = this.timer.scheduleAtFixedRate(chokeCheck, unchokingInterval, unchokingInterval, TimeUnit.SECONDS);
+     //make a hashmap and grab peerInfo from peerProcess
+     private HashMap<String, peerInfo> allPeerInfo;
+     
+     public chokeHandler(int Interval, int pref){
+        unchokingInterval = Interval;
+        numPreferred = pref; 
+        allPeerInfo = peerProcess.getPeerInfo();
      }
 
+     public void start() {
+        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
+        //schedule to run the chokeUnchoke function every unchokingInterval seconds
+        scheduler.scheduleAtFixedRate(this::chokeUnchoke, 0, unchokingInterval, TimeUnit.SECONDS);
+    }
 
-     TimerTask chokeCheck = new TimerTask() {
+    private void chokeUnchoke() {
+        //list all peers in allPeerInfo 
+        for (Map.Entry<String, peerInfo> entry : allPeerInfo.entrySet()) {
+            String key = entry.getKey();
+            peerInfo value = entry.getValue();
+            //make unchoked list of peers
+            if (value.getInterested() && value.getChoked()) {
+                unchoked.add(key);
+            }
+        }
+
+        List<Neighbor> interestedNeighbors = peer.getInterestedNeighbors();
+        Collections.sort(interestedNeighbors, Comparator.comparingDouble(Neighbor::getDownloadRate).reversed());
+
+        List<Neighbor> preferredNeighbors = interestedNeighbors.subList(0, Math.min(preferredNeighbors, interestedNeighbors.size()));
+
+        for (Neighbor neighbor : preferredNeighbors) {
+            if (!neighbor.isUnchoked()) {
+                peer.sendUnchokeMessage(neighbor);
+                neighbor.setUnchoked(true);
+            }
+        }
+
+        for (Neighbor neighbor : interestedNeighbors) {
+            if (!preferredNeighbors.contains(neighbor) && neighbor.isUnchoked()) {
+                peer.sendChokeMessage(neighbor);
+                neighbor.setUnchoked(false);
+            }
+        }
+    }
+     /*TimerTask chokeCheck = new TimerTask() {
          @Override
          public void run() {
              //TODO: get the set of unchoked peers
@@ -56,5 +97,5 @@ import java.util.concurrent.ScheduledFuture;
                  }
              }
          }
-     };
+     };*/
  }
