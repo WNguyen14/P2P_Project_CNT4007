@@ -11,6 +11,11 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
+import logging.ConnectionEventLogger;
+import logging.PeerEventLogger;
+import java.io.File;
+import java.io.RandomAccessFile;
+
 public class PeerHandler implements Runnable {
     private Socket peerSocket;
     private DataInputStream in;
@@ -32,7 +37,14 @@ public class PeerHandler implements Runnable {
         this.out = new DataOutputStream(peerSocket.getOutputStream());
         this.fileManager = fileManager;
         this.interestManager = interestManager;
-        this.pieceAvailability = pieceAvailability; // Initialize the pieceAvailability
+        this.pieceAvailability = pieceAvailability;
+
+        int peerId = getPeerIdFromSocket(socket);
+        File peerDir = new File("~/project/peer_" + peerId);
+        if (!peerDir.exists()) {
+            peerDir.mkdirs(); // Create directory if it doesn't exist
+        }
+        // Additional initialization for file handling based on the directory
     }
 
     private int getPeerIdFromSocket(Socket socket) {
@@ -129,7 +141,7 @@ public class PeerHandler implements Runnable {
         // Additional logic when choked
         System.out.println("Choked by peer " + getPeerIdFromSocket(peerSocket));
     }
-    
+
     private void handleUnchoke() {
         chokedByPeer = false;
         // Additional logic when unchoked (like requesting pieces)
@@ -141,7 +153,7 @@ public class PeerHandler implements Runnable {
         int peerId = getPeerIdFromSocket(peerSocket);
         BitSet myBitfield = fileManager.getBitfield();
         BitSet peerBitfield = pieceAvailability.get(peerId);
-    
+
         if (peerBitfield != null) {
             for (int i = 0; i < peerBitfield.length(); i++) {
                 if (peerBitfield.get(i) && !myBitfield.get(i)) {
@@ -151,7 +163,7 @@ public class PeerHandler implements Runnable {
             }
         }
     }
-    
+
     private void requestPiece(int pieceIndex) {
         try {
             // Creating a request message for the specified piece index
@@ -161,17 +173,17 @@ public class PeerHandler implements Runnable {
             System.err.println("Error sending request message for piece " + pieceIndex + ": " + e.getMessage());
         }
     }
-    
+
     private byte[] createRequestMessage(int pieceIndex) {
-        // Assuming the message format is: [message length (4 bytes)] + [message type (1 byte)] + [piece index (4 bytes)]
+        // Assuming the message format is: [message length (4 bytes)] + [message type (1
+        // byte)] + [piece index (4 bytes)]
         ByteBuffer buffer = ByteBuffer.allocate(9);
         buffer.putInt(5); // Length of the message (1 byte for type + 4 bytes for piece index)
         buffer.put((byte) '6'); // Message type '6' for request
         buffer.putInt(pieceIndex); // The requested piece index
-    
+
         return buffer.array();
     }
-    
 
     private void handleInterested() {
         int peerId = getPeerIdFromSocket(peerSocket);

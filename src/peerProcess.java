@@ -9,15 +9,18 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ExecutorService;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
+import java.util.concurrent.ConcurrentHashMap;
 import java.nio.ByteBuffer;
-import java.util.Arrays;
+import logging.Logger;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
+import java.util.Arrays;
 
-import logging.ConnectionEventLogger;
-import logging.Logger;
-
-
+/**
+ * The main class for starting and managing peer processes in a P2P network.
+ * This class initializes peer connections, handles incoming connections,
+ * and manages the server socket.
+ */
 public class peerProcess {
 
     private int myPeerID;
@@ -28,12 +31,10 @@ public class peerProcess {
     private ServerSocket serverSocket;
     private ExecutorService executor;
 
-    // Map to keep track of peer IDs associated with sockets
-    private static final Map<Socket, Integer> socketToPeerIdMap = new HashMap<>();
+    private static final Map<Socket, Integer> socketToPeerIdMap = new ConcurrentHashMap<>();
 
     private InterestManager interestManager = new InterestManager();
 
-    // Main method to start the peer process
     public static void main(String[] args) {
         try {
             if (args.length != 1) {
@@ -43,12 +44,11 @@ public class peerProcess {
             int peerID = Integer.parseInt(args[0]);
             new peerProcess(peerID).start();
         } catch (Exception e) {
-            Logger.error("Error starting peer process: %s", e.getMessage());
+            Logger.error("Failed to start peer process: %s", e.getMessage());
             System.exit(1);
         }
     }
 
-    // Constructor to initialize peer process
     public peerProcess(int myPeerID) throws FileNotFoundException {
         this.myPeerID = myPeerID;
         this.configInfo = new Config("Common.cfg");
@@ -56,9 +56,9 @@ public class peerProcess {
         this.myPeerInfo = allPeerInfo.get(Integer.toString(myPeerID));
         this.pieceAvailability = new HashMap<>();
         this.executor = Executors.newCachedThreadPool();
+        Logger.info("Peer process for peerID %d created", myPeerID);
     }
 
-    // Starts the peer process
     private void start() throws IOException {
         Logger.info("Peer %d starting...", myPeerID);
         initPieces();
@@ -66,10 +66,9 @@ public class peerProcess {
         startServer();
         connectToPreviousPeers();
 
-        Logger.info("Successfully initialized peer %d", myPeerID);
+        Logger.info("Peer %d successfully initialized", myPeerID);
     }
 
-    // Initializes the server to listen for incoming connections
     private void startServer() throws IOException {
         int myPort = this.myPeerInfo.getPeerPort();
         this.serverSocket = new ServerSocket(myPort);
@@ -77,30 +76,18 @@ public class peerProcess {
             while (!serverSocket.isClosed()) {
                 try {
                     Socket clientSocket = serverSocket.accept();
-                    handleClientSocket(clientSocket);
+                    int peerId = determinePeerId(clientSocket);
+                    socketToPeerIdMap.put(clientSocket, peerId);
+                    FileManager fm = new FileManager(configInfo.getFileSize(), configInfo.getPieceSize(), configInfo.getConfigFileName(), myPeerInfo.getContainsFile());
+                    executor.submit(new PeerHandler(clientSocket, fm, interestManager, pieceAvailability));
                 } catch (IOException e) {
-                    Logger.error("Error accepting client socket: %s", e.getMessage());
+                    Logger.error("Error accepting connection: %s", e.getMessage());
                 }
             }
         });
+        Logger.info("Server started, listening on port %d", myPort);
     }
 
-    // Handles a client socket connection
-    private void handleClientSocket(Socket clientSocket) throws IOException {
-        int peerId = determinePeerId(clientSocket);
-        socketToPeerIdMap.put(clientSocket, peerId);
-
-        FileManager fm = new FileManager(
-                configInfo.getFileSize(),
-                configInfo.getPieceSize(),
-                configInfo.getConfigFileName(),
-                myPeerInfo.getContainsFile());
-
-        executor.submit(new PeerHandler(clientSocket, fm, interestManager, pieceAvailability));
-        ConnectionEventLogger.peerConnected(myPeerID, peerId);
-    }
-
-    // Determines the peer ID from the handshake message
     private int determinePeerId(Socket socket) throws IOException {
         DataInputStream in = new DataInputStream(socket.getInputStream());
         byte[] handshake = new byte[32];
@@ -108,7 +95,6 @@ public class peerProcess {
         return ByteBuffer.wrap(Arrays.copyOfRange(handshake, 28, 32)).getInt();
     }
 
-    // Connects to peers that started before this peer
     private void connectToPreviousPeers() {
         allPeerInfo.forEach((peerID, info) -> {
             int currentPeerID = Integer.parseInt(peerID);
@@ -122,62 +108,54 @@ public class peerProcess {
         });
     }
 
-    // Establishes a connection to a peer
     private void connectToPeer(peerInfo info) throws IOException {
         Socket peerSocket = new Socket(info.getPeerAddress(), info.getPeerPort());
         handshake hs = new handshake(myPeerID);
         DataOutputStream out = new DataOutputStream(peerSocket.getOutputStream());
-        DataInputStream in = new DataInputStream(peerSocket.getInputStream());
-
         out.write(hs.createHandshake());
         out.flush();
-
+        DataInputStream in = new DataInputStream(peerSocket.getInputStream());
         byte[] response = new byte[32];
         in.readFully(response);
         int receivedPeerID = ByteBuffer.wrap(Arrays.copyOfRange(response, 28, 32)).getInt();
         if (receivedPeerID != Integer.parseInt(info.getPeerID())) {
-            throw new IOException("Handshake response from incorrect peer");
+            throw new IOException("Incorrect peer ID received in handshake");
         }
-
         socketToPeerIdMap.put(peerSocket, receivedPeerID);
-        FileManager fm = new FileManager(
-                configInfo.getFileSize(), configInfo.getPieceSize(),
-                configInfo.getConfigFileName(), myPeerInfo.getContainsFile());
+        FileManager fm = new FileManager(configInfo.getFileSize(), configInfo.getPieceSize(), configInfo.getConfigFileName(), myPeerInfo.getContainsFile());
         executor.submit(new PeerHandler(peerSocket, fm, interestManager, pieceAvailability));
-        ConnectionEventLogger.peerConnected(myPeerID, receivedPeerID);
+        Logger.info("Connected to peer %d", receivedPeerID);
     }
 
-    // Reads peer information from the configuration file
     public HashMap<String, peerInfo> makePeerInfo(String fileName) throws FileNotFoundException {
         Scanner in = new Scanner(new FileReader(fileName));
         HashMap<String, peerInfo> peersMap = new HashMap<>();
-
         while (in.hasNextLine()) {
             String[] line = in.nextLine().split(" ");
-            peersMap.put(line[0], new peerInfo(line[0], line[1], line[2], line[3]));
+            peerInfo newPeer = new peerInfo(line[0], line[1], line[2], line[3]);
+            peersMap.put(line[0], newPeer);
         }
         in.close();
         return peersMap;
     }
 
-    // Initializes the pieces based on the peer information
     private void initPieces() {
         int numPieces = getNumPieces();
-        allPeerInfo.forEach((key, value) -> {
+        allPeerInfo.forEach((id, info) -> {
             BitSet available = new BitSet(numPieces);
-            if (value.getContainsFile()) {
+            if (info.getContainsFile()) {
                 available.set(0, numPieces);
             }
-            pieceAvailability.put(Integer.parseInt(key), available);
+            pieceAvailability.put(Integer.parseInt(id), available);
         });
+        Logger.info("Pieces initialized for peer %d", myPeerID);
     }
 
-    // Calculates the number of pieces for the file
+    public BitSet getPeerBitfield(String peerId) {
+        return pieceAvailability.get(peerId);
+    }
+
     private int getNumPieces() {
-        int l = configInfo.getFileSize() / configInfo.getPieceSize();
-        if (configInfo.getFileSize() % configInfo.getPieceSize() != 0) {
-            l += 1;
-        }
-        return l;
+        return (configInfo.getFileSize() + configInfo.getPieceSize() - 1) / configInfo.getPieceSize();
     }
 }
