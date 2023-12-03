@@ -17,6 +17,9 @@ public class PeerHandler implements Runnable {
     private boolean chokedByPeer = false;
     private static final Map<Socket, String> socketToPeerIdMap = new ConcurrentHashMap<>();
     
+    // Kinda bs but I'm not sure how else to do this
+    private String peerID;
+
     // Variable to store the piece index requested by this peer
     private int requestedPieceIndex;
 
@@ -31,6 +34,11 @@ public class PeerHandler implements Runnable {
     private String getPeerIdFromSocket(Socket socket) {
         return socketToPeerIdMap.get(socket);
     }
+
+    public String getPeerID() {
+        return this.peerID;
+    }
+    
 
     @Override
     public void run() {
@@ -72,8 +80,27 @@ public class PeerHandler implements Runnable {
     }
 
     private void performHandshake() throws IOException {
-        // TODO: Implement handshake logic here
+        // Create handshake message
+        handshake myHandshake = new handshake(this.peerID);
+        byte[] handshakeMessage = myHandshake.createHandshake();
+    
+        // Send handshake message
+        out.write(handshakeMessage);
+        out.flush();
+    
+        // Wait for the handshake response
+        byte[] response = new byte[handshake.getHeader().length() + handshake.getZeroBitsLength() + handshake.getPeerIdLength()];
+        in.readFully(response); // Read the full handshake message
+    
+        // Read the handshake message and extract the peerID from the response
+        String remotePeerID = handshake.readHandshake(response);
+        socketToPeerIdMap.put(peerSocket, remotePeerID); // Use the socket to map to the peerID
+    
+        // Log or do additional actions based on the successful handshake
+        System.out.println("Handshake successful with peer: " + remotePeerID);
     }
+    
+    
 
     private void handleMessage(byte[] message) throws IOException {
         // Parse the message type
@@ -130,15 +157,19 @@ public class PeerHandler implements Runnable {
 
     private void handleInterested() {
         // When a peer sends an 'interested' message, it means they want pieces from us
-        String peerId = getPeerIdFromSocket(peerSocket); // You'll need to implement this method based on your code structure
-        interestManager.addInterestedPeer(peerId, requestedPieceIndex); 
+        String peerId = getPeerIdFromSocket(peerSocket); // You'll need to implement this method based on your code
+                                                         // structure
+        interestManager.addInterestedPeer(peerId, requestedPieceIndex);
         System.out.println("Peer " + peerId + " is interested.");
     }
 
     private void handleNotInterested() {
-        // When a peer sends a 'not interested' message, they don't want any more pieces from us
-        String peerId = getPeerIdFromSocket(peerSocket); // You'll need to implement this method based on your code structure
-        interestManager.removeInterestedPeer(peerId, requestedPieceIndex); // You will need to determine the correct piece index based on your protocol
+        // When a peer sends a 'not interested' message, they don't want any more pieces
+        // from us
+        String peerId = getPeerIdFromSocket(peerSocket); // You'll need to implement this method based on your code
+                                                         // structure
+        interestManager.removeInterestedPeer(peerId, requestedPieceIndex); // You will need to determine the correct
+                                                                           // piece index based on your protocol
         System.out.println("Peer " + peerId + " is not interested.");
     }
 
@@ -168,15 +199,14 @@ public class PeerHandler implements Runnable {
             try {
                 fileManager.sendPiece(requestedPieceIndex, out);
             } catch (IOException e) {
-                System.err.println("IOException occurred while sending piece " + requestedPieceIndex + ": " + e.getMessage());
+                System.err.println(
+                        "IOException occurred while sending piece " + requestedPieceIndex + ": " + e.getMessage());
                 // Handle exception by logging or sending a different message
             }
         } else {
             System.out.println("Cannot send piece " + requestedPieceIndex + " as we are choked by the peer.");
         }
     }
-
-    
 
     private void handlePiece(byte[] message) {
         // Implement piece logic, storing the received piece

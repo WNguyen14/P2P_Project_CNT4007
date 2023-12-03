@@ -13,6 +13,10 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ExecutorService;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
+import java.util.concurrent.ConcurrentHashMap;
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
+import java.io.DataInputStream;
 
 public class peerProcess {
 
@@ -25,6 +29,9 @@ public class peerProcess {
     private ExecutorService executor;
 
     private static final Map<Socket, String> socketToPeerIdMap = new ConcurrentHashMap<>();
+
+
+    private InterestManager interestManager = new InterestManager();
 
     public static void main(String[] args) {
         try {
@@ -69,18 +76,20 @@ public class peerProcess {
             while (!serverSocket.isClosed()) {
                 try {
                     Socket clientSocket = serverSocket.accept();
-
-                    // You need to determine the peer ID here. The code is commented out because
-                    // it depends on how you retrieve the peer ID (e.g., from a handshake)
-                    // String peerId = ...
-                    // socketToPeerIdMap.put(clientSocket, peerId);
-
+    
+                    // Here you can add the logic to determine the peer ID after the handshake
+                    // For now, let's assume you have a method that does that
+                    String peerId = determinePeerId(clientSocket);
+                    socketToPeerIdMap.put(clientSocket, peerId);
+    
                     FileManager fm = new FileManager(
                             configInfo.getFileSize(),
                             configInfo.getPieceSize(),
                             configInfo.getConfigFileName(),
                             myPeerInfo.getContainsFile());
-                    executor.submit(new PeerHandler(clientSocket, fm));
+    
+                    // Pass the interestManager instance to the PeerHandler
+                    executor.submit(new PeerHandler(clientSocket, fm, interestManager));
                 } catch (IOException e) {
                     if (serverSocket.isClosed()) {
                         System.out.println("Server socket is closed, stopping the server.");
@@ -92,6 +101,17 @@ public class peerProcess {
         });
     }
 
+    private String determinePeerId(Socket socket) throws IOException {
+        DataInputStream in = new DataInputStream(socket.getInputStream());
+        byte[] handshake = new byte[32]; // According to your protocol, the handshake message is 32 bytes long.
+        in.readFully(handshake); // Read the handshake message.
+    
+        // Extract the peer ID from the handshake message.
+        // The peer ID is the last 4 bytes of the handshake message.
+        String peerId = new String(Arrays.copyOfRange(handshake, 28, 32), StandardCharsets.UTF_8);
+        return peerId;
+    }
+    
     private void connectToPreviousPeers() {
         // Connect to peers with a lower peer ID (which means they started earlier).
         allPeerInfo.forEach((peerID, info) -> {
