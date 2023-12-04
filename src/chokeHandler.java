@@ -6,103 +6,95 @@ import java.util.stream.Collectors;
 import logging.ConnectionEventLogger;
 import logging.PeerEventLogger;
 
-public class chokeHandler {
-    private List<String> unchoked;
-    private List<String> interestedNeighbors;
 
-    private final int unchokingInterval;
-    private final int optUnchokingInterval;
-    private final int numPreferred;
+ public class chokeHandler {
+     //initialize variables
+     private List<String> unchoked;
+     public List<String> interestedNeighbors;
 
-    private final HashMap<String, peerInfo> allPeerInfo;
-    private final InterestManager interestManager;
+     private int unchokingInterval;
+     private int optUnchokingInterval;
+     private int numPreferred;
+     //make a hashmap and grab peerInfo from peerProcess
+     private HashMap<String, peerInfo> allPeerInfo;
+     
+     private InterestManager interestManager;
 
-    public chokeHandler(int unchokingInterval, int optUnchokingInterval, int numPreferred, HashMap<String, peerInfo> allPeerInfo, InterestManager interestManager) {
-        this.unchoked = new ArrayList<>();
-        this.interestedNeighbors = new ArrayList<>();
-        this.unchokingInterval = unchokingInterval;
-        this.optUnchokingInterval = optUnchokingInterval;
-        this.numPreferred = numPreferred;
-        this.allPeerInfo = allPeerInfo;
-        this.interestManager = interestManager;
+     public chokeHandler(int Interval, int pref, HashMap<String, peerInfo> a, InterestManager interestManager) {
+        unchokingInterval = Interval;
+        numPreferred = pref;
+        allPeerInfo = a;
+        this.interestManager = interestManager; 
     }
+     public void start() {
+        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
+        //schedule to run the chokeUnchoke function every unchokingInterval seconds
+        Runnable cncRunnable = new Runnable() {
+            public void run() {
+                chokeUnchoke(allPeerInfo);
+            }
+        };
+        Runnable optRunnable = new Runnable() {
+            public void run() {
+                optUnchoke(allPeerInfo);
+            }
+        };
 
-    public void start() {
-        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(2);
-
-        // Regular unchoking
-        Runnable cncRunnable = this::chokeUnchoke;
         scheduler.scheduleAtFixedRate(cncRunnable, 0, unchokingInterval, TimeUnit.SECONDS);
-
-        // Optimistic unchoking
-        Runnable optRunnable = this::optUnchoke;
         scheduler.scheduleAtFixedRate(optRunnable, 0, optUnchokingInterval, TimeUnit.SECONDS);
     }
 
-    private void chokeUnchoke() {
-        // Iterate through all peers
+    private void chokeUnchoke(HashMap<String, peerInfo> allPeerInfo) {
+        //list all peers in allPeerInfo 
         for (Map.Entry<String, peerInfo> entry : allPeerInfo.entrySet()) {
-            String peerId = entry.getKey();
-            peerInfo peer = entry.getValue();
-
-            // Get interested peers for this peer
-            Set<Integer> interestedPeers = interestManager.getPeersInterestedIn(Integer.parseInt(peerId));
+            String key = entry.getKey();
+            peerInfo value = entry.getValue();
+            //list interested neighbors using interestmanager
+            Set<Integer> interestedPeers = interestManager.getPeersInterestedIn(Integer.parseInt(value.getPeerID()));
             interestedNeighbors = interestedPeers.stream()
-                                                 .map(Object::toString)
-                                                 .collect(Collectors.toList());
+                                    .map(Object::toString)
+                                    .collect(Collectors.toList());
 
-            // Sort interested neighbors based on download speed
-            interestedNeighbors.sort(Comparator.comparing(pId -> allPeerInfo.get(pId).getDownloadSpeed()).reversed());
-
-            // Pick top 'numPreferred' neighbors
-            List<String> preferredNeighbors = new ArrayList<>();
-            if (interestedNeighbors.size() > numPreferred) {
-                preferredNeighbors.addAll(interestedNeighbors.subList(0, numPreferred));
-            } else {
-                preferredNeighbors.addAll(interestedNeighbors);
-            }
-
-            // Log preferred neighbors
-            PeerEventLogger.preferredNeighborsChanged(Integer.parseInt(peerId), String.join(",", preferredNeighbors));
-
-            // Unchoke preferred neighbors and choke others
-            updateChokingStatus(peerId, preferredNeighbors);
-        }
-    }
-
-    private void updateChokingStatus(String peerId, List<String> preferredNeighbors) {
-        for (String neighbor : interestedNeighbors) {
-            peerInfo neighborInfo = allPeerInfo.get(neighbor);
-
-            if (preferredNeighbors.contains(neighbor)) {
+            Collections.sort(interestedNeighbors, Comparator.comparing(peerId -> allPeerInfo.get(peerId).getDownloadSpeed()).reversed());
+            List<String> preferredNeighbors = new ArrayList<>(interestedNeighbors.subList(0, Math.min(numPreferred, interestedNeighbors.size())));
+            //log preferred neighbors
+            PeerEventLogger.preferredNeighborsChanged(Integer.parseInt(value.getPeerID()), String.join(",", preferredNeighbors));
+            //unchoke all preferred neighbors
+            for (String neighbor : preferredNeighbors) {
                 if (!unchoked.contains(neighbor)) {
-                    neighborInfo.unchoke();
+                    allPeerInfo.get(neighbor).unchoke();
                     unchoked.add(neighbor);
-                    PeerEventLogger.peerUnchoked(Integer.parseInt(peerId), Integer.parseInt(neighbor));
-                }
-            } else {
-                if (unchoked.contains(neighbor)) {
-                    neighborInfo.choke();
-                    unchoked.remove(neighbor);
-                    PeerEventLogger.peerChoked(Integer.parseInt(peerId), Integer.parseInt(neighbor));
+                    //log unchoked neighbor
+                    PeerEventLogger.optimisticNeighborChanged(Integer.parseInt(allPeerInfo.get(neighbor).getPeerID()), Integer.parseInt(allPeerInfo.get(neighbor).getPeerID()));
                 }
             }
+            //choke all other neighbors
+            for (String neighbor : interestedNeighbors) {
+                if (!preferredNeighbors.contains(neighbor)) {
+                    if (unchoked.contains(neighbor)) {
+                        unchoked.remove(neighbor);
+                    }
+                    allPeerInfo.get(neighbor).choke();
+                    //log choked neighbor
+                    PeerEventLogger.peerChoked(Integer.parseInt(value.getPeerID()), Integer.parseInt(neighbor));
+                }
+            }
+
         }
+        
     }
-
-    private void optUnchoke() {
-        if (interestedNeighbors.isEmpty()) {
-            return; // No interested neighbors to optimistically unchoke
-        }
-
-        // Randomly select an optimistically unchoked neighbor
-        Random rand = new Random();
-        String optUnchokedNeighbor = interestedNeighbors.get(rand.nextInt(interestedNeighbors.size()));
-
-        if (!unchoked.contains(optUnchokedNeighbor)) {
-            allPeerInfo.get(optUnchokedNeighbor).unchoke();
-            unchoked.add(optUnchokedNeighbor);
-            PeerEventLogger.optimisticNeighborChanged(Integer.parseInt(optUnchokedNeighbor), Integer.parseInt(optUnchokedNeighbor));
-        }
+    private void optUnchoke(HashMap<String, peerInfo> allPeerInfo){
+            //determine optomistically unchoked neighbor by choosing randomly from the interested neighbors
+            Random rand = new Random();
+            //get a random interested neighbor
+            String optUnchokedNeighbor = interestedNeighbors.get(rand.nextInt(interestedNeighbors.size()));
+            //if the optomistically unchoked neighbor is not already unchoked, unchoke them
+            if (!unchoked.contains(optUnchokedNeighbor)) {
+                allPeerInfo.get(optUnchokedNeighbor).unchoke();
+                unchoked.add(optUnchokedNeighbor);
+                //log the change in optomistically unchoked neighbor
+                PeerEventLogger.optimisticNeighborChanged(Integer.parseInt(allPeerInfo.get(optUnchokedNeighbor).getPeerID()), Integer.parseInt(allPeerInfo.get(optUnchokedNeighbor).getPeerID()));
+            }
     }
-}
+     
+ }
