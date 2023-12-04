@@ -52,6 +52,8 @@ public class P2PFileSharingException extends Exception {
         this.errorType = errorType;
     }
 
+    
+
     /**
      * Returns the type of the error.
      * @return Type of the error as defined in ErrorType enum
@@ -85,4 +87,6 @@ public class P2PFileSharingException extends Exception {
         System.err.println(this.toString());
         super.printStackTrace();
     }
+
+    
 }
