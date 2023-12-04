@@ -90,6 +90,7 @@ public class peerProcess {
                     } catch (P2PFileSharingException e) {
                         Logger.error("Failed to initialize FileManager: %s", e.getMessage());
                         // REEEEEEEEEEEEEEEEEEEE
+                        // mweow
                     }
                 } catch (IOException e) {
                     Logger.error("Error accepting connection: %s", e.getMessage());
