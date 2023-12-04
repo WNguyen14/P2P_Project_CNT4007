@@ -83,41 +83,55 @@ public class peerProcess {
             while (!serverSocket.isClosed()) {
                 try {
                     Socket clientSocket = serverSocket.accept();
-                    int peerId = determinePeerId(clientSocket);
-                    socketToPeerIdMap.put(clientSocket, peerId);
-                    try {
-                        FileManager fm = new FileManager(configInfo.getFileSize(), configInfo.getPieceSize(),
-                                configInfo.getConfigFileName(), myPeerInfo.getContainsFile(), myPeerID);
-                        executor.submit(new PeerHandler(clientSocket, fm, interestManager, pieceAvailability, socketToPeerIdMap));
-                    } catch (P2PFileSharingException e) {
-                        Logger.error("Failed to initialize FileManager: %s", e.getMessage());
-                        // REEEEEEEEEEEEEEEEEEEE
-                        // mweow
-                    }
+    
+                    // Perform handshake with the connecting client
+                    handshake hs = new handshake(myPeerID); // Your own peer ID
+                    DataOutputStream out = new DataOutputStream(clientSocket.getOutputStream());
+                    byte[] handshakeMessage = hs.createHandshake();
+                    out.write(handshakeMessage);
+                    out.flush();
+    
+                    // Read handshake response from client
+                    DataInputStream in = new DataInputStream(clientSocket.getInputStream());
+                    byte[] response = new byte[32];
+                    in.readFully(response);
+                    int connectingPeerID = ByteBuffer.wrap(Arrays.copyOfRange(response, 28, 32)).getInt();
+    
+                    // Update map with the connecting peer ID
+                    socketToPeerIdMap.put(clientSocket, connectingPeerID);
+                    Logger.info("Handshake successful with connecting peer: " + connectingPeerID);
+    
+                    // Proceed with normal peer handler logic
+                    FileManager fm = new FileManager(configInfo.getFileSize(), configInfo.getPieceSize(),
+                            configInfo.getConfigFileName(), myPeerInfo.getContainsFile(), myPeerID);
+                    executor.submit(new PeerHandler(clientSocket, fm, interestManager, pieceAvailability, socketToPeerIdMap));
+    
                 } catch (IOException e) {
-                    Logger.error("Error accepting connection: %s", e.getMessage());
+                    Logger.error("Error accepting connection: " + e.getMessage());
+                } catch (P2PFileSharingException e) {
+                    Logger.error("Error in handshake: " + e.getMessage());
                 }
             }
         });
         Logger.info("Server started, listening on port %d", myPort);
     }
-
+    
     private int determinePeerId(Socket socket) throws IOException {
         DataInputStream in = null;
         try {
             in = new DataInputStream(socket.getInputStream());
             byte[] handshake = new byte[32];
-    
+
             // Read the handshake message from the input stream
             int bytesRead = in.read(handshake);
             Logger.info("Bytes read for handshake: " + bytesRead);
             Logger.info("Received handshake bytes: " + Arrays.toString(handshake));
-    
+
             // Extracting the peer ID from the last 4 bytes
             ByteBuffer buffer = ByteBuffer.wrap(handshake, 28, 4);
             int extractedPeerId = buffer.getInt();
             Logger.info("Extracted peer ID: " + extractedPeerId);
-    
+
             return extractedPeerId;
         } catch (IOException e) {
             Logger.error("Error in handshake: " + e.getMessage());
@@ -127,10 +141,9 @@ public class peerProcess {
             // if (in != null) in.close();
         }
     }
-    
 
     private void connectToPreviousPeers() {
-        
+
         allPeerInfo.forEach((peerID, info) -> {
             int currentPeerID = Integer.parseInt(peerID);
             if (currentPeerID < myPeerID) {
@@ -154,29 +167,39 @@ public class peerProcess {
             handshake hs = new handshake(Integer.parseInt(info.getPeerID()));
             DataOutputStream out = new DataOutputStream(peerSocket.getOutputStream());
             byte[] handshakeMessage = hs.createHandshake();
-    
+
             Logger.info("Sending handshake to peer " + info.getPeerID());
             out.write(handshakeMessage);
             out.flush();
-    
+
             DataInputStream in = new DataInputStream(peerSocket.getInputStream());
             byte[] response = new byte[32];
             in.readFully(response);
-    
+
             int receivedPeerID = ByteBuffer.wrap(Arrays.copyOfRange(response, 28, 32)).getInt();
-    
+
             if (receivedPeerID != Integer.parseInt(info.getPeerID())) {
                 Logger.error("Incorrect peer ID received in handshake: " + receivedPeerID + " != " + info.getPeerID());
-                throw new P2PFileSharingException("Incorrect peer ID received in handshake", P2PFileSharingException.ErrorType.HANDSHAKE_ERROR);
+                throw new P2PFileSharingException("Incorrect peer ID received in handshake",
+                        P2PFileSharingException.ErrorType.HANDSHAKE_ERROR);
             }
-    
+
+            // Log the map before updating
+            Logger.info("socketToPeerIdMap before update: " + socketToPeerIdMap.toString());
+
             socketToPeerIdMap.put(peerSocket, receivedPeerID);
-    
+
+            // Log the map after updating
+            Logger.info("socketToPeerIdMap after update: " + socketToPeerIdMap.toString());
+            Logger.info("Handshake successful with peer " + receivedPeerID);
+
+            Logger.info("Handshake successful with peer " + receivedPeerID);
+
             FileManager fm = new FileManager(configInfo.getFileSize(), configInfo.getPieceSize(),
                     configInfo.getConfigFileName(), myPeerInfo.getContainsFile(), myPeerID);
             executor.submit(new PeerHandler(peerSocket, fm, interestManager, pieceAvailability, socketToPeerIdMap));
             Logger.info("Connected to peer " + receivedPeerID);
-    
+
         } catch (IOException e) {
             Logger.error("IO error in peer connection to " + info.getPeerID() + ": " + e.getMessage());
             if (peerSocket != null) {
@@ -189,14 +212,13 @@ public class peerProcess {
             throw e;
         } catch (NumberFormatException e) {
             Logger.error("Error parsing peer ID: " + e.getMessage());
-            throw new P2PFileSharingException("Peer ID format error", P2PFileSharingException.ErrorType.MESSAGE_ERROR, e);
+            throw new P2PFileSharingException("Peer ID format error", P2PFileSharingException.ErrorType.MESSAGE_ERROR,
+                    e);
         } catch (P2PFileSharingException e) {
             Logger.error("Error in handshake file thing: " + e.getMessage());
             throw e;
         }
     }
-    
-    
 
     public HashMap<String, peerInfo> makePeerInfo(String fileName) throws FileNotFoundException {
         try {

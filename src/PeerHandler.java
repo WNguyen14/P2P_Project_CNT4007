@@ -24,7 +24,7 @@ public class PeerHandler implements Runnable {
     private InterestManager interestManager;
     private HashMap<Integer, BitSet> pieceAvailability;
     private boolean chokedByPeer = false;
-    private Map<Socket, Integer> socketToPeerIdMap;
+    private final Map<Socket, Integer> socketToPeerIdMap;
     private int requestedPieceIndex;
     private int remotePeerID;
 
@@ -37,10 +37,17 @@ public class PeerHandler implements Runnable {
         this.interestManager = interestManager;
         this.pieceAvailability = pieceAvailability;
         this.socketToPeerIdMap = socketMap;
+        
+    }
+
+    public void setRemotePeerID(int remotePeerID) {
+        this.remotePeerID = remotePeerID;
     }
 
     private int getPeerIdFromSocket(Socket socket) {
-        Logger.info(socketToPeerIdMap.toString());
+        Logger.info("MEOWWW " + socketToPeerIdMap.toString());
+        Logger.info("Current socketToPeerIdMap: " + socketToPeerIdMap.toString());
+
         return socketToPeerIdMap.getOrDefault(socket, -1);
     }
 
@@ -78,7 +85,7 @@ public class PeerHandler implements Runnable {
     private void performHandshake() throws P2PFileSharingException {
         try {
             handshake myHandshake = new handshake(getPeerIdFromSocket(peerSocket));
-            Logger.info("handshake peer ID: " + getPeerIdFromSocket(peerSocket));
+            Logger.info("handshake peer ID of other: " + getPeerIdFromSocket(peerSocket));
             byte[] handshakeMessage = myHandshake.createHandshake();
     
             // Log the handshake message being sent
