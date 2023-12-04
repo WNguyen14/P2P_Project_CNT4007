@@ -151,7 +151,7 @@ public class peerProcess {
         Socket peerSocket = null;
         try {
             peerSocket = new Socket(info.getPeerAddress(), info.getPeerPort());
-            handshake hs = new handshake(myPeerID);
+            handshake hs = new handshake(Integer.parseInt(info.getPeerID()));
             DataOutputStream out = new DataOutputStream(peerSocket.getOutputStream());
             byte[] handshakeMessage = hs.createHandshake();
     

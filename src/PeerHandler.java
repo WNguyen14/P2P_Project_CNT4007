@@ -40,6 +40,7 @@ public class PeerHandler implements Runnable {
     }
 
     private int getPeerIdFromSocket(Socket socket) {
+        Logger.info(socketToPeerIdMap.toString());
         return socketToPeerIdMap.getOrDefault(socket, -1);
     }
 
@@ -81,28 +82,19 @@ public class PeerHandler implements Runnable {
             byte[] handshakeMessage = myHandshake.createHandshake();
     
             // Log the handshake message being sent
-            Logger.info("Sending handshake messageasdasd: " + Arrays.toString(handshakeMessage));
+            Logger.info("Sending handshake message " + Arrays.toString(handshakeMessage) + " to peer "
+                    + getPeerIdFromSocket(peerSocket));
     
             out.write(handshakeMessage);
             out.flush();
     
             byte[] response = new byte[32];
-            int bytesRead = 0;
-            int offset = 0;
     
             // Manually read bytes from the input stream
-            while (bytesRead < 32) {
-                int result = in.read(response, offset, 32 - bytesRead);
-                if (result == -1) {
-                    // End of stream reached
-                    throw new EOFException("End of stream reached unexpectedly while reading handshake response.");
-                }
-                bytesRead += result;
-                offset += result;
-            }
-    
+            in.read(response);
             // Log the received handshake response
-            Logger.info("Received handshake response: " + Arrays.toString(response));
+            Logger.info("Received handshake response: " + Arrays.toString(response) + " from peer "
+                    + getPeerIdFromSocket(peerSocket));
     
             int remotePeerID = ByteBuffer.wrap(Arrays.copyOfRange(response, 28, 32)).getInt();
             Logger.info("Extracted remote peer ID: " + remotePeerID);
@@ -119,6 +111,7 @@ public class PeerHandler implements Runnable {
             // Save remotePeerID as a field for future use
             this.remotePeerID = remotePeerID;
         } catch (IOException e) {
+            e.printStackTrace();
             throw new P2PFileSharingException("Error during handshake",
                     P2PFileSharingException.ErrorType.HANDSHAKE_ERROR, e);
         }
