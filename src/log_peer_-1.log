@@ -1,0 +1,19 @@
+[2023-12-03T20:33:50.410622900]: [Time]: Peer [-1] starts handshake with Peer [-1]
+[2023-12-03T20:38:49.052995900]: [Time]: Peer [-1] starts handshake with Peer [-1]
+[2023-12-03T20:48:23.862459500]: [Time]: Communication error in Peer [-1]: Error during handshake
+[2023-12-03T20:48:27.708272700]: [Time]: Peer [-1] starts handshake with Peer [-1]
+[2023-12-03T20:48:29.038627400]: [Time]: Communication error in Peer [-1]: Error during handshake
+[2023-12-03T20:48:44.052221900]: [Time]: Peer [-1] starts handshake with Peer [29382374]
+[2023-12-03T21:00:56.563665500]: [Time]: Peer [-1] starts handshake with Peer [29382374]
+[2023-12-03T21:08:32.330049900]: [Time]: Communication error in Peer [-1]: Error during handshake
+[2023-12-03T21:11:11.211720100]: [Time]: Peer [-1] starts handshake with Peer [29382374]
+[2023-12-03T21:11:40.287632200]: [Time]: Communication error in Peer [-1]: Error during handshake
+[2023-12-03T21:12:10.341397400]: [Time]: Peer [-1] starts handshake with Peer [29382374]
+[2023-12-03T21:24:42.830168500]: [Time]: Communication error in Peer [-1]: Error during handshake
+[2023-12-03T21:25:21.210966700]: [Time]: Peer [-1] starts handshake with Peer [29382374]
+[2023-12-03T21:37:20.472098500]: [Time]: Peer [-1] starts handshake with Peer [29382374]
+[2023-12-03T21:43:22.776711600]: [Time]: Communication error in Peer [-1]: Error during handshake
+[2023-12-03T21:43:43.337147100]: [Time]: Peer [-1] starts handshake with Peer [29382374]
+[2023-12-03T21:47:48.172436700]: [Time]: Peer [-1] starts handshake with Peer [29382374]
+[2023-12-03T21:48:24.920510700]: [Time]: Peer [-1] starts handshake with Peer [29382374]
+[2023-12-03T21:50:25.719086300]: [Time]: Peer [-1] starts handshake with Peer [29382374]
